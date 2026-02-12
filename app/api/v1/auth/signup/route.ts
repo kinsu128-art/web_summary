@@ -4,7 +4,11 @@ import { authSignUpSchema } from "@/lib/validation";
 
 const isDuplicateEmailError = (message: string) => {
   const lower = message.toLowerCase();
-  return lower.includes("already registered") || lower.includes("already exists");
+  return (
+    lower.includes("already registered") ||
+    lower.includes("already been registered") ||
+    lower.includes("already exists")
+  );
 };
 
 export async function POST(request: Request) {
