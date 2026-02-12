@@ -173,6 +173,15 @@ export default function DocumentDetailPage() {
     }
   };
 
+  const toImageProxyUrl = (src: string) => {
+    const target = src.trim();
+    if (!target || target.startsWith("data:")) return target;
+    const params = new URLSearchParams();
+    params.set("url", target);
+    if (doc?.source_url) params.set("ref", doc.source_url);
+    return `/api/v1/assets/image?${params.toString()}`;
+  };
+
   return (
     <main className="shell">
       <section className="panel">
@@ -241,7 +250,18 @@ export default function DocumentDetailPage() {
               </div>
             ) : (
               <article className="markdown-body">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content_markdown}</ReactMarkdown>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    img: (props) => {
+                      const src = typeof props.src === "string" ? props.src : "";
+                      const proxied = toImageProxyUrl(src);
+                      return <img alt={props.alt ?? ""} src={proxied} />;
+                    }
+                  }}
+                >
+                  {doc.content_markdown}
+                </ReactMarkdown>
               </article>
             )}
           </>

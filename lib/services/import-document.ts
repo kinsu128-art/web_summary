@@ -49,11 +49,57 @@ const normalizeContentImages = (html: string, baseUrl: string) => {
   const dom = new JSDOM(`<body>${html}</body>`, { url: baseUrl });
   const { document } = dom.window;
 
+  const resolveImageSource = (img: HTMLImageElement) => {
+    const candidates = [
+      img.getAttribute("src"),
+      img.getAttribute("data-src"),
+      img.getAttribute("data-original"),
+      img.getAttribute("data-lazy-src"),
+      img.getAttribute("data-lazyload"),
+      img.getAttribute("data-url")
+    ].filter((v): v is string => Boolean(v && v.trim()));
+
+    const srcset = img.getAttribute("srcset") ?? img.getAttribute("data-srcset");
+    if (srcset) {
+      const first = srcset
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map((v) => v.split(/\s+/)[0])
+        .find(Boolean);
+      if (first) candidates.push(first);
+    }
+
+    const picked = candidates.find(Boolean);
+    if (!picked) return null;
+
+    const trimmed = picked.trim();
+    if (trimmed.startsWith("data:")) return trimmed;
+    if (trimmed.startsWith("//")) return `https:${trimmed}`;
+    try {
+      return new URL(trimmed, baseUrl).toString();
+    } catch {
+      return null;
+    }
+  };
+
   const images = Array.from(document.querySelectorAll("img"));
   for (const img of images) {
+    const absoluteSrc = resolveImageSource(img);
+    if (absoluteSrc) {
+      img.setAttribute("src", absoluteSrc);
+    }
+
     img.removeAttribute("width");
     img.removeAttribute("height");
     img.removeAttribute("sizes");
+    img.removeAttribute("srcset");
+    img.removeAttribute("data-src");
+    img.removeAttribute("data-original");
+    img.removeAttribute("data-lazy-src");
+    img.removeAttribute("data-lazyload");
+    img.removeAttribute("data-srcset");
+    img.removeAttribute("loading");
     img.style.maxWidth = "100%";
     img.style.height = "auto";
     img.style.display = "block";
