@@ -12,6 +12,9 @@ const mapAuthErrorMessage = (message: string) => {
   if (lower.includes("email logins are disabled")) {
     return "현재 Supabase에서 이메일 로그인이 비활성화되어 있습니다. Supabase Dashboard > Authentication > Providers > Email에서 로그인 기능을 활성화해 주세요.";
   }
+  if (lower.includes("already registered") || lower.includes("already exists")) {
+    return "이미 가입된 이메일입니다.";
+  }
   if (lower.includes("email not confirmed")) {
     return "이메일 인증이 완료되지 않았습니다. 인증 링크를 클릭한 뒤 다시 로그인해 주세요.";
   }
@@ -58,10 +61,12 @@ export default function LoginPage() {
     });
 
     if (!signupResponse.ok) {
-      const body = await signupResponse.json().catch(() => ({}));
-      const text =
-        (body as { error?: { message?: string } })?.error?.message ?? "회원가입 처리에 실패했습니다.";
-      throw new Error(text);
+      const body = (await signupResponse.json().catch(() => ({}))) as {
+        error?: { message?: string; details?: { reason?: string } };
+      };
+      const messageText = body.error?.message ?? "회원가입 처리에 실패했습니다.";
+      const reasonText = body.error?.details?.reason;
+      throw new Error(reasonText ? `${messageText} (${reasonText})` : messageText);
     }
 
     await handleLogin();

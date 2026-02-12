@@ -1,6 +1,11 @@
-import { authSignUpSchema } from "@/lib/validation";
-import { errorResponse, getErrorMessage, ok } from "@/lib/http";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { errorResponse, getErrorMessage, ok } from "@/lib/http";
+import { authSignUpSchema } from "@/lib/validation";
+
+const isDuplicateEmailError = (message: string) => {
+  const lower = message.toLowerCase();
+  return lower.includes("already registered") || lower.includes("already exists");
+};
 
 export async function POST(request: Request) {
   try {
@@ -18,9 +23,9 @@ export async function POST(request: Request) {
       password: parsed.data.password,
       email_confirm: true
     });
+
     if (error) {
-      const text = error.message.toLowerCase();
-      if (text.includes("already registered") || text.includes("already exists")) {
+      if (isDuplicateEmailError(error.message)) {
         return errorResponse("CONFLICT", "이미 가입된 이메일입니다.", 409);
       }
       throw error;
@@ -28,8 +33,10 @@ export async function POST(request: Request) {
 
     return ok({ user_id: data.user?.id ?? null }, 201);
   } catch (error) {
-    return errorResponse("INTERNAL_ERROR", "회원가입 처리에 실패했습니다.", 500, {
-      reason: getErrorMessage(error)
-    });
+    const reason = getErrorMessage(error);
+    if (isDuplicateEmailError(reason)) {
+      return errorResponse("CONFLICT", "이미 가입된 이메일입니다.", 409, { reason });
+    }
+    return errorResponse("INTERNAL_ERROR", "회원가입 처리에 실패했습니다.", 500, { reason });
   }
 }
