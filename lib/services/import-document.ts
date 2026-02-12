@@ -191,6 +191,99 @@ const fetchHtml = async (url: string) => {
   return await response.text();
 };
 
+type ExtractedArticle = {
+  content: string;
+  title: string | null;
+  excerpt: string | null;
+  byline: string | null;
+};
+
+type ReaderFallback = {
+  title: string | null;
+  markdown: string;
+  excerpt: string | null;
+};
+
+const extractWithFallback = (rawHtml: string, url: string): ExtractedArticle => {
+  const dom = new JSDOM(rawHtml, { url });
+  const reader = new Readability(dom.window.document);
+  const article = reader.parse();
+  if (article?.content) {
+    return {
+      content: article.content,
+      title: article.title ?? null,
+      excerpt: article.excerpt ?? null,
+      byline: article.byline ?? null
+    };
+  }
+
+  const doc = dom.window.document;
+  const selectors = [
+    "article",
+    "main article",
+    ".post-content",
+    ".entry-content",
+    ".article-content",
+    ".content",
+    "main",
+    "#content"
+  ];
+
+  for (const selector of selectors) {
+    const candidates = Array.from(doc.querySelectorAll(selector));
+    for (const node of candidates) {
+      const textLength = (node.textContent ?? "").replace(/\s+/g, " ").trim().length;
+      if (textLength < 200) continue;
+      return {
+        content: node.innerHTML,
+        title: doc.title || null,
+        excerpt: (node.querySelector("p")?.textContent ?? "").trim().slice(0, 280) || null,
+        byline: null
+      };
+    }
+  }
+
+  throw new Error("Could not extract readable content");
+};
+
+const fetchMarkdownWithReaderFallback = async (url: string): Promise<ReaderFallback> => {
+  const normalized = new URL(url).toString();
+  const readerUrl = `https://r.jina.ai/http://${normalized.replace(/^https?:\/\//i, "")}`;
+
+  const response = await fetch(readerUrl, {
+    headers: {
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari",
+      accept: "text/plain,text/markdown;q=0.9,*/*;q=0.8"
+    }
+  });
+  if (!response.ok) {
+    throw new Error(`Reader fallback failed with status ${response.status}`);
+  }
+
+  const raw = (await response.text()).trim();
+  if (!raw) throw new Error("Reader fallback returned empty content");
+
+  const titleMatch = raw.match(/^Title:\s*(.+)$/m);
+  const marker = "Markdown Content:";
+  const idx = raw.indexOf(marker);
+  const markdown = (idx >= 0 ? raw.slice(idx + marker.length) : raw).trim();
+  if (markdown.length < 80) throw new Error("Reader fallback content too short");
+
+  const excerpt = markdown
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+    .replace(/[`*_>#-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 280);
+
+  return {
+    title: titleMatch?.[1]?.trim() ?? null,
+    markdown,
+    excerpt: excerpt || null
+  };
+};
+
 export const runImportDocument = async (userId: string, input: ImportInput) => {
   const job = await createImportJob(userId, input.url);
 
@@ -200,20 +293,31 @@ export const runImportDocument = async (userId: string, input: ImportInput) => {
 
     await updateImportJob(userId, job.id, { status: "extracting", progress: 45 });
     const dom = new JSDOM(rawHtml, { url: input.url });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
-    if (!article?.content) {
-      throw new Error("Could not extract readable content");
-    }
-
-    const normalizedHtml = normalizeContentImages(article.content, input.url);
-    const markdown = toMarkdown(normalizedHtml);
-    if (!markdown) {
-      throw new Error("Extracted content is empty");
-    }
-
     const language = dom.window.document.documentElement.lang?.trim() || "ko";
-    const finalTitle = trimText(article.title, 180) ?? "Untitled";
+
+    let normalizedHtml: string | null = null;
+    let markdown = "";
+    let derivedTitle: string | null = null;
+    let derivedExcerpt: string | null = null;
+    let derivedAuthor: string | null = null;
+
+    try {
+      const article = extractWithFallback(rawHtml, input.url);
+      normalizedHtml = normalizeContentImages(article.content, input.url);
+      markdown = toMarkdown(normalizedHtml);
+      derivedTitle = article.title ?? null;
+      derivedExcerpt = article.excerpt ?? null;
+      derivedAuthor = article.byline ?? null;
+    } catch {
+      const reader = await fetchMarkdownWithReaderFallback(input.url);
+      markdown = reader.markdown;
+      derivedTitle = reader.title;
+      derivedExcerpt = reader.excerpt;
+      derivedAuthor = null;
+    }
+    if (!markdown) throw new Error("Extracted content is empty");
+
+    const finalTitle = trimText(derivedTitle, 180) ?? "Untitled";
 
     await updateImportJob(userId, job.id, { status: "saving", progress: 75 });
     const document = await createDocument({
@@ -223,10 +327,10 @@ export const runImportDocument = async (userId: string, input: ImportInput) => {
       source_domain: normalizeDomain(input.url),
       title: finalTitle,
       user_title: input.title?.trim() || null,
-      excerpt: trimText(article.excerpt),
+      excerpt: trimText(derivedExcerpt),
       content_markdown: markdown,
       content_html: normalizedHtml,
-      author: trimText(article.byline, 120),
+      author: trimText(derivedAuthor, 120),
       language,
       content_hash: sha256(markdown)
     });
@@ -284,24 +388,39 @@ export const rerunExtractionForDocument = async (userId: string, documentId: str
 
     await updateImportJob(userId, job.id, { status: "extracting", progress: 45 });
     const dom = new JSDOM(rawHtml, { url: source.source_url });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
-    if (!article?.content) throw new Error("Could not extract readable content");
+    const language = dom.window.document.documentElement.lang?.trim() || "ko";
 
-    const normalizedHtml = normalizeContentImages(article.content, source.source_url);
-    const markdown = toMarkdown(normalizedHtml);
+    let normalizedHtml: string | null = null;
+    let markdown = "";
+    let derivedTitle: string | null = null;
+    let derivedExcerpt: string | null = null;
+    let derivedAuthor: string | null = null;
+
+    try {
+      const article = extractWithFallback(rawHtml, source.source_url);
+      normalizedHtml = normalizeContentImages(article.content, source.source_url);
+      markdown = toMarkdown(normalizedHtml);
+      derivedTitle = article.title ?? null;
+      derivedExcerpt = article.excerpt ?? null;
+      derivedAuthor = article.byline ?? null;
+    } catch {
+      const reader = await fetchMarkdownWithReaderFallback(source.source_url);
+      markdown = reader.markdown;
+      derivedTitle = reader.title;
+      derivedExcerpt = reader.excerpt;
+      derivedAuthor = null;
+    }
     if (!markdown) throw new Error("Extracted content is empty");
 
-    const language = dom.window.document.documentElement.lang?.trim() || "ko";
-    const finalTitle = trimText(article.title, 180) ?? "Untitled";
+    const finalTitle = trimText(derivedTitle, 180) ?? "Untitled";
 
     await updateImportJob(userId, job.id, { status: "saving", progress: 75 });
     await overwriteDocumentFromExtraction(userId, documentId, {
       title: finalTitle,
-      excerpt: trimText(article.excerpt),
+      excerpt: trimText(derivedExcerpt),
       content_markdown: markdown,
       content_html: normalizedHtml,
-      author: trimText(article.byline, 120),
+      author: trimText(derivedAuthor, 120),
       language,
       content_hash: sha256(markdown),
       source_domain: normalizeDomain(source.source_url),
