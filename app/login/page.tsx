@@ -9,6 +9,9 @@ type AuthMode = "login" | "signup";
 
 const mapAuthErrorMessage = (message: string) => {
   const lower = message.toLowerCase();
+  if (lower.includes("email logins are disabled")) {
+    return "현재 Supabase에서 이메일 로그인이 비활성화되어 있습니다. Supabase Dashboard > Authentication > Providers > Email에서 로그인 기능을 활성화해 주세요.";
+  }
   if (lower.includes("email not confirmed")) {
     return "이메일 인증이 완료되지 않았습니다. 인증 링크를 클릭한 뒤 다시 로그인해 주세요.";
   }
