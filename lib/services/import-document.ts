@@ -7,6 +7,9 @@ import {
   createCapture,
   createDocument,
   createImportJob,
+  getDocumentSourceById,
+  getDocumentById,
+  overwriteDocumentFromExtraction,
   replaceDocumentFolders,
   replaceDocumentTags,
   updateImportJob
@@ -147,6 +150,83 @@ export const runImportDocument = async (input: ImportInput) => {
       status: "failed",
       progress: 100,
       error_message: error instanceof Error ? error.message : "Import failed"
+    });
+    throw error;
+  }
+};
+
+export const rerunExtractionForDocument = async (documentId: string) => {
+  const source = await getDocumentSourceById(documentId);
+  if (!source) {
+    throw new Error("Document not found");
+  }
+
+  const job = await createImportJob(source.source_url);
+
+  try {
+    await updateImportJob(job.id, {
+      status: "fetching",
+      progress: 15,
+      error_message: null
+    });
+    const rawHtml = await fetchHtml(source.source_url);
+
+    await updateImportJob(job.id, { status: "extracting", progress: 45 });
+    const dom = new JSDOM(rawHtml, { url: source.source_url });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
+    if (!article?.content) throw new Error("Could not extract readable content");
+
+    const normalizedHtml = normalizeContentImages(article.content, source.source_url);
+    const markdown = toMarkdown(normalizedHtml);
+    if (!markdown) throw new Error("Extracted content is empty");
+
+    const language = dom.window.document.documentElement.lang?.trim() || "ko";
+    const finalTitle = trimText(article.title, 180) ?? "Untitled";
+
+    await updateImportJob(job.id, { status: "saving", progress: 75 });
+    await overwriteDocumentFromExtraction(documentId, {
+      title: finalTitle,
+      excerpt: trimText(article.excerpt),
+      content_markdown: markdown,
+      content_html: normalizedHtml,
+      author: trimText(article.byline, 120),
+      language,
+      content_hash: sha256(markdown),
+      source_domain: normalizeDomain(source.source_url),
+      canonical_url: source.source_url
+    });
+
+    await createCapture({
+      document_id: documentId,
+      raw_html: null,
+      cleaned_html: normalizedHtml,
+      extractor: "readability-reextract",
+      extractor_version: "mozilla/readability",
+      extract_score: null,
+      error_message: null
+    });
+
+    await updateImportJob(job.id, {
+      status: "done",
+      progress: 100,
+      document_id: documentId,
+      error_message: null
+    });
+
+    const updated = await getDocumentById(documentId);
+    return {
+      job_id: job.id,
+      status: "done",
+      document_id: documentId,
+      document: updated
+    };
+  } catch (error) {
+    await updateImportJob(job.id, {
+      status: "failed",
+      progress: 100,
+      document_id: documentId,
+      error_message: error instanceof Error ? error.message : "Re-extract failed"
     });
     throw error;
   }

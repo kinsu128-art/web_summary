@@ -34,6 +34,7 @@ export default function DocumentDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReextracting, setIsReextracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -130,6 +131,31 @@ export default function DocumentDetailPage() {
     }
   };
 
+  const reextractDocument = async () => {
+    if (!id) return;
+    setIsReextracting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/v1/documents/${id}/reextract`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error?.message ?? "Failed to re-extract.");
+      if (data?.document) {
+        setDoc(data.document);
+        setTitleInput(data.document.user_title ?? "");
+        setTagsInput((data.document.tags ?? []).join(", "));
+        setMarkdownInput(data.document.content_markdown ?? "");
+      } else {
+        await load();
+      }
+      setMessage("Re-extract completed.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to re-extract.");
+    } finally {
+      setIsReextracting(false);
+    }
+  };
+
   return (
     <main className="shell">
       <section className="panel">
@@ -139,6 +165,9 @@ export default function DocumentDetailPage() {
             <Link href="/">Back</Link>
             <button onClick={() => setEditMode((v) => !v)} type="button">
               {editMode ? "Cancel" : "Edit"}
+            </button>
+            <button disabled={isReextracting} onClick={reextractDocument} type="button">
+              {isReextracting ? "Re-extracting..." : "Re-extract"}
             </button>
             <button className="danger-btn" disabled={isDeleting} onClick={removeDocument} type="button">
               {isDeleting ? "Deleting..." : "Delete"}

@@ -168,6 +168,49 @@ export const getDocumentById = async (id: string) => {
   };
 };
 
+export const getDocumentSourceById = async (id: string) => {
+  const { data, error } = await db()
+    .from("documents")
+    .select("id,source_url,user_title")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as { id: string; source_url: string; user_title: string | null } | null;
+};
+
+export const overwriteDocumentFromExtraction = async (
+  id: string,
+  input: {
+    title: string;
+    excerpt?: string | null;
+    content_markdown: string;
+    content_html?: string | null;
+    author?: string | null;
+    language?: string;
+    content_hash?: string;
+    source_domain?: string | null;
+    canonical_url?: string | null;
+  }
+) => {
+  const { error } = await db()
+    .from("documents")
+    .update({
+      title: input.title,
+      excerpt: input.excerpt ?? null,
+      content_markdown: input.content_markdown,
+      content_html: input.content_html ?? null,
+      author: input.author ?? null,
+      language: input.language ?? "ko",
+      content_hash: input.content_hash ?? null,
+      source_domain: input.source_domain ?? null,
+      canonical_url: input.canonical_url ?? null,
+      reading_minutes: estimateReadingMinutes(input.content_markdown),
+      status: "ready"
+    })
+    .eq("id", id);
+  if (error) throw error;
+};
+
 export const updateDocument = async (
   id: string,
   input: {
