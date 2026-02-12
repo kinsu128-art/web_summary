@@ -1,7 +1,23 @@
 import { z } from "zod";
 
+const normalizedUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .transform((value, ctx) => {
+    try {
+      return new URL(value).toString();
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid URL"
+      });
+      return z.NEVER;
+    }
+  });
+
 export const importDocumentSchema = z.object({
-  url: z.string().url(),
+  url: normalizedUrlSchema,
   title: z.string().trim().min(1).optional(),
   tags: z.array(z.string().trim().min(1)).optional(),
   folder_ids: z.array(z.string().uuid()).optional(),
