@@ -2,6 +2,8 @@ import { errorResponse, ok } from "@/lib/http";
 import { runImportDocument } from "@/lib/services/import-document";
 import { importDocumentSchema } from "@/lib/validation";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
