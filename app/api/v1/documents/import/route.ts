@@ -1,5 +1,4 @@
 import { errorResponse, ok } from "@/lib/http";
-import { runImportDocument } from "@/lib/services/import-document";
 import { importDocumentSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -14,6 +13,7 @@ export async function POST(request: Request) {
       });
     }
 
+    const { runImportDocument } = await import("@/lib/services/import-document");
     const result = await runImportDocument(parsed.data);
     return ok(result, 202);
   } catch (error) {
