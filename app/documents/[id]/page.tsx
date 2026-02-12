@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { authFetch } from "@/lib/supabase/auth-fetch";
 
 type DocumentDetail = {
   id: string;
@@ -41,7 +42,7 @@ export default function DocumentDetailPage() {
 
   const loadFolders = useCallback(async () => {
     try {
-      const response = await fetch("/api/v1/folders", { cache: "no-store" });
+      const response = await authFetch("/api/v1/folders", { cache: "no-store" });
       const data = await response.json();
       if (response.ok && Array.isArray(data.items)) setFolders(data.items);
     } catch {
@@ -54,7 +55,7 @@ export default function DocumentDetailPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/v1/documents/${id}`, { cache: "no-store" });
+      const response = await authFetch(`/api/v1/documents/${id}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error?.message ?? "Failed to load document.");
 
@@ -90,7 +91,7 @@ export default function DocumentDetailPage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/v1/documents/${id}`, {
+      const response = await authFetch(`/api/v1/documents/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -120,7 +121,7 @@ export default function DocumentDetailPage() {
     setIsDeleting(true);
     setError(null);
     try {
-      const response = await fetch(`/api/v1/documents/${id}`, { method: "DELETE" });
+      const response = await authFetch(`/api/v1/documents/${id}`, { method: "DELETE" });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error((data as { error?: { message?: string } })?.error?.message ?? "Failed to delete.");
@@ -138,7 +139,7 @@ export default function DocumentDetailPage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/v1/documents/${id}/reextract`, { method: "POST" });
+      const response = await authFetch(`/api/v1/documents/${id}/reextract`, { method: "POST" });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error?.message ?? "Failed to re-extract.");
       if (data?.document) {

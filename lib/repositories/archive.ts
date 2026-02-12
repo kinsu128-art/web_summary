@@ -13,10 +13,10 @@ export const estimateReadingMinutes = (markdown: string) => {
 const normalizeTagNames = (names: string[]) =>
   [...new Set(names.map((v) => v.trim().toLowerCase()).filter(Boolean))];
 
-export const createImportJob = async (url: string) => {
+export const createImportJob = async (userId: string, url: string) => {
   const { data, error } = await db()
     .from("import_jobs")
-    .insert({ url, status: "queued", progress: 0 })
+    .insert({ user_id: userId, url, status: "queued", progress: 0 })
     .select("id,status")
     .single();
 
@@ -25,14 +25,16 @@ export const createImportJob = async (url: string) => {
 };
 
 export const updateImportJob = async (
+  userId: string,
   id: string,
   patch: { status?: string; progress?: number; document_id?: string | null; error_message?: string | null }
 ) => {
-  const { error } = await db().from("import_jobs").update(patch).eq("id", id);
+  const { error } = await db().from("import_jobs").update(patch).eq("id", id).eq("user_id", userId);
   if (error) throw error;
 };
 
 export const createDocument = async (input: {
+  user_id: string;
   source_url: string;
   canonical_url?: string | null;
   source_domain?: string | null;
@@ -49,6 +51,7 @@ export const createDocument = async (input: {
   const { data, error } = await db()
     .from("documents")
     .insert({
+      user_id: input.user_id,
       source_url: input.source_url,
       canonical_url: input.canonical_url ?? null,
       source_domain: input.source_domain ?? null,
@@ -84,6 +87,7 @@ export const createCapture = async (input: {
 };
 
 type DocumentListQuery = {
+  userId: string;
   q?: string;
   tag?: string;
   folderId?: string;
@@ -104,6 +108,7 @@ export const listDocuments = async (query: DocumentListQuery) => {
       "id,source_url,source_domain,title,user_title,excerpt,content_markdown,content_html,reading_minutes,status,created_at,updated_at",
       { count: "exact" }
     )
+    .eq("user_id", query.userId)
     .range(from, to);
 
   if (query.status) builder = builder.eq("status", query.status);
@@ -118,8 +123,8 @@ export const listDocuments = async (query: DocumentListQuery) => {
 
   const rows = (data ?? []) as DocumentRow[];
   const ids = rows.map((r) => r.id);
-  const tagMap = await getTagNamesByDocumentIds(ids);
-  const folderMap = await getFolderIdsByDocumentIds(ids);
+  const tagMap = await getTagNamesByDocumentIds(query.userId, ids);
+  const folderMap = await getFolderIdsByDocumentIds(query.userId, ids);
 
   let items: DocumentListItem[] = rows.map((row) => ({
     id: row.id,
@@ -145,19 +150,23 @@ export const listDocuments = async (query: DocumentListQuery) => {
   return { items, total: count ?? items.length };
 };
 
-export const getDocumentById = async (id: string) => {
+export const getDocumentById = async (userId: string, id: string) => {
   const { data, error } = await db()
     .from("documents")
     .select(
       "id,source_url,source_domain,title,user_title,excerpt,content_markdown,content_html,reading_minutes,status,created_at,updated_at"
     )
     .eq("id", id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) throw error;
   if (!data) return null;
 
-  const [tags, folderIds] = await Promise.all([getTagNamesByDocumentIds([id]), getFolderIdsByDocumentIds([id])]);
+  const [tags, folderIds] = await Promise.all([
+    getTagNamesByDocumentIds(userId, [id]),
+    getFolderIdsByDocumentIds(userId, [id])
+  ]);
   const row = data as DocumentRow;
 
   return {
@@ -168,17 +177,19 @@ export const getDocumentById = async (id: string) => {
   };
 };
 
-export const getDocumentSourceById = async (id: string) => {
+export const getDocumentSourceById = async (userId: string, id: string) => {
   const { data, error } = await db()
     .from("documents")
     .select("id,source_url,user_title")
     .eq("id", id)
+    .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
   return data as { id: string; source_url: string; user_title: string | null } | null;
 };
 
 export const overwriteDocumentFromExtraction = async (
+  userId: string,
   id: string,
   input: {
     title: string;
@@ -207,11 +218,13 @@ export const overwriteDocumentFromExtraction = async (
       reading_minutes: estimateReadingMinutes(input.content_markdown),
       status: "ready"
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", userId);
   if (error) throw error;
 };
 
 export const updateDocument = async (
+  userId: string,
   id: string,
   input: {
     user_title?: string | null;
@@ -228,120 +241,124 @@ export const updateDocument = async (
   }
 
   if (Object.keys(patch).length > 0) {
-    const { error } = await db().from("documents").update(patch).eq("id", id);
+    const { error } = await db().from("documents").update(patch).eq("id", id).eq("user_id", userId);
     if (error) throw error;
   }
 
   if (input.tags) {
-    await replaceDocumentTags(id, input.tags);
+    await replaceDocumentTags(userId, id, input.tags);
   }
   if (input.folder_ids) {
-    await replaceDocumentFolders(id, input.folder_ids);
+    await replaceDocumentFolders(userId, id, input.folder_ids);
   }
 
-  return getDocumentById(id);
+  return getDocumentById(userId, id);
 };
 
-export const deleteDocument = async (id: string) => {
-  const { error } = await db().from("documents").delete().eq("id", id);
+export const deleteDocument = async (userId: string, id: string) => {
+  const { error } = await db().from("documents").delete().eq("id", id).eq("user_id", userId);
   if (error) throw error;
 };
 
-export const getJobById = async (id: string) => {
+export const getJobById = async (userId: string, id: string) => {
   const { data, error } = await db()
     .from("import_jobs")
     .select("id,url,status,progress,document_id,error_message,created_at,updated_at")
     .eq("id", id)
+    .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
   return data;
 };
 
-export const listJobs = async (limit = 20) => {
+export const listJobs = async (userId: string, limit = 20) => {
   const { data, error } = await db()
     .from("import_jobs")
     .select("id,url,status,progress,document_id,error_message,created_at,updated_at")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
   return data ?? [];
 };
 
-export const listTags = async () => {
-  const { data, error } = await db().from("tags").select("id,name,color,created_at").order("name");
+export const listTags = async (userId: string) => {
+  const { data, error } = await db().from("tags").select("id,name,color,created_at").eq("user_id", userId).order("name");
   if (error) throw error;
   return data ?? [];
 };
 
-export const createTag = async (name: string, color?: string) => {
+export const createTag = async (userId: string, name: string, color?: string) => {
   const { data, error } = await db()
     .from("tags")
-    .insert({ name: name.trim().toLowerCase(), color: color ?? "#4A5568" })
+    .insert({ user_id: userId, name: name.trim().toLowerCase(), color: color ?? "#4A5568" })
     .select("id,name,color,created_at")
     .single();
   if (error) throw error;
   return data;
 };
 
-export const deleteTag = async (id: string) => {
-  const { error } = await db().from("tags").delete().eq("id", id);
+export const deleteTag = async (userId: string, id: string) => {
+  const { error } = await db().from("tags").delete().eq("id", id).eq("user_id", userId);
   if (error) throw error;
 };
 
-export const listFolders = async () => {
+export const listFolders = async (userId: string) => {
   const { data, error } = await db()
     .from("folders")
     .select("id,name,description,created_at")
+    .eq("user_id", userId)
     .order("name");
   if (error) throw error;
   return data ?? [];
 };
 
-export const createFolder = async (name: string, description?: string) => {
+export const createFolder = async (userId: string, name: string, description?: string) => {
   const { data, error } = await db()
     .from("folders")
-    .insert({ name, description: description ?? null })
+    .insert({ user_id: userId, name, description: description ?? null })
     .select("id,name,description,created_at")
     .single();
   if (error) throw error;
   return data;
 };
 
-export const updateFolder = async (id: string, patch: { name?: string; description?: string | null }) => {
+export const updateFolder = async (userId: string, id: string, patch: { name?: string; description?: string | null }) => {
   const { data, error } = await db()
     .from("folders")
     .update(patch)
     .eq("id", id)
+    .eq("user_id", userId)
     .select("id,name,description,created_at")
     .maybeSingle();
   if (error) throw error;
   return data;
 };
 
-export const deleteFolder = async (id: string) => {
-  const { error } = await db().from("folders").delete().eq("id", id);
+export const deleteFolder = async (userId: string, id: string) => {
+  const { error } = await db().from("folders").delete().eq("id", id).eq("user_id", userId);
   if (error) throw error;
 };
 
-const getTagNamesByDocumentIds = async (ids: string[]) => {
+const getTagNamesByDocumentIds = async (userId: string, ids: string[]) => {
   const map = new Map<string, string[]>();
   if (ids.length === 0) return map;
 
   const { data, error } = await db()
     .from("document_tags")
-    .select("document_id,tags(name)")
+    .select("document_id,tags(name,user_id)")
     .in("document_id", ids);
   if (error) throw error;
 
   for (const row of data ?? []) {
     const key = row.document_id as string;
     const entry = map.get(key) ?? [];
-    const linked = row.tags as { name?: string } | { name?: string }[] | null;
+    const linked = row.tags as { name?: string; user_id?: string } | { name?: string; user_id?: string }[] | null;
     if (Array.isArray(linked)) {
       linked.forEach((item) => {
-        if (item?.name) entry.push(item.name);
+        if (item?.name && item.user_id === userId) entry.push(item.name);
       });
-    } else if (linked?.name) {
+    } else if (linked?.name && linked.user_id === userId) {
       entry.push(linked.name);
     }
     map.set(key, entry);
@@ -349,14 +366,21 @@ const getTagNamesByDocumentIds = async (ids: string[]) => {
   return map;
 };
 
-const getFolderIdsByDocumentIds = async (ids: string[]) => {
+const getFolderIdsByDocumentIds = async (userId: string, ids: string[]) => {
   const map = new Map<string, string[]>();
   if (ids.length === 0) return map;
 
-  const { data, error } = await db().from("document_folders").select("document_id,folder_id").in("document_id", ids);
+  const { data, error } = await db()
+    .from("document_folders")
+    .select("document_id,folder_id,folders(user_id)")
+    .in("document_id", ids);
   if (error) throw error;
 
   for (const row of data ?? []) {
+    const linked = row.folders as { user_id?: string } | { user_id?: string }[] | null;
+    const linkedUserId = Array.isArray(linked) ? linked[0]?.user_id : linked?.user_id;
+    if (linkedUserId !== userId) continue;
+
     const key = row.document_id as string;
     const entry = map.get(key) ?? [];
     if (row.folder_id) entry.push(row.folder_id as string);
@@ -365,32 +389,49 @@ const getFolderIdsByDocumentIds = async (ids: string[]) => {
   return map;
 };
 
-export const replaceDocumentFolders = async (documentId: string, folderIds: string[]) => {
+export const replaceDocumentFolders = async (userId: string, documentId: string, folderIds: string[]) => {
   const normalized = [...new Set(folderIds)];
   const { error: delError } = await db().from("document_folders").delete().eq("document_id", documentId);
   if (delError) throw delError;
 
   if (normalized.length === 0) return;
-  const rows = normalized.map((folderId) => ({ document_id: documentId, folder_id: folderId }));
+  const { data: ownedFolders, error: folderError } = await db()
+    .from("folders")
+    .select("id")
+    .eq("user_id", userId)
+    .in("id", normalized);
+  if (folderError) throw folderError;
+
+  const owned = new Set((ownedFolders ?? []).map((row) => row.id as string));
+  const validFolderIds = normalized.filter((id) => owned.has(id));
+  if (validFolderIds.length !== normalized.length) {
+    throw new Error("One or more folders do not belong to current user");
+  }
+
+  const rows = validFolderIds.map((folderId) => ({ document_id: documentId, folder_id: folderId }));
   const { error } = await db().from("document_folders").insert(rows);
   if (error) throw error;
 };
 
-export const replaceDocumentTags = async (documentId: string, tagNames: string[]) => {
+export const replaceDocumentTags = async (userId: string, documentId: string, tagNames: string[]) => {
   const normalized = normalizeTagNames(tagNames);
 
   const { error: delError } = await db().from("document_tags").delete().eq("document_id", documentId);
   if (delError) throw delError;
   if (normalized.length === 0) return;
 
-  const { data: existing, error: existingError } = await db().from("tags").select("id,name").in("name", normalized);
+  const { data: existing, error: existingError } = await db()
+    .from("tags")
+    .select("id,name")
+    .eq("user_id", userId)
+    .in("name", normalized);
   if (existingError) throw existingError;
 
   const existingMap = new Map((existing ?? []).map((t) => [t.name as string, t.id as string]));
   const missing = normalized.filter((name) => !existingMap.has(name));
 
   if (missing.length > 0) {
-    const insertRows = missing.map((name) => ({ name }));
+    const insertRows = missing.map((name) => ({ user_id: userId, name }));
     const { data: inserted, error: insertError } = await db().from("tags").insert(insertRows).select("id,name");
     if (insertError) throw insertError;
     for (const row of inserted ?? []) {
@@ -406,4 +447,3 @@ export const replaceDocumentTags = async (documentId: string, tagNames: string[]
   const { error } = await db().from("document_tags").insert(mappingRows);
   if (error) throw error;
 };
-

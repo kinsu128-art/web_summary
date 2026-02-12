@@ -1,10 +1,14 @@
 import { errorResponse, ok } from "@/lib/http";
 import { importDocumentSchema } from "@/lib/validation";
+import { getUserIdFromRequest, unauthorized } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    const userId = await getUserIdFromRequest(request);
+    if (!userId) return unauthorized();
+
     const body = await request.json();
     const parsed = importDocumentSchema.safeParse(body);
     if (!parsed.success) {
@@ -14,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     const { runImportDocument } = await import("@/lib/services/import-document");
-    const result = await runImportDocument(parsed.data);
+    const result = await runImportDocument(userId, parsed.data);
     return ok(result, 202);
   } catch (error) {
     return errorResponse("INTERNAL_ERROR", "Failed to import document", 500, {

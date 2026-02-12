@@ -1,10 +1,14 @@
 import { createFolder, listFolders } from "@/lib/repositories/archive";
 import { errorResponse, getErrorMessage, isSchemaCacheError, ok } from "@/lib/http";
 import { createFolderSchema } from "@/lib/validation";
+import { getUserIdFromRequest, unauthorized } from "@/lib/auth/user";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const items = await listFolders();
+    const userId = await getUserIdFromRequest(request);
+    if (!userId) return unauthorized();
+
+    const items = await listFolders(userId);
     return ok({ items });
   } catch (error) {
     if (isSchemaCacheError(error)) {
@@ -20,6 +24,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const userId = await getUserIdFromRequest(request);
+    if (!userId) return unauthorized();
+
     const body = await request.json();
     const parsed = createFolderSchema.safeParse(body);
     if (!parsed.success) {
@@ -27,7 +34,7 @@ export async function POST(request: Request) {
         issues: parsed.error.issues
       });
     }
-    const created = await createFolder(parsed.data.name, parsed.data.description);
+    const created = await createFolder(userId, parsed.data.name, parsed.data.description);
     return ok(created, 201);
   } catch (error) {
     if (isSchemaCacheError(error)) {

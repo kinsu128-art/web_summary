@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { authFetch } from "@/lib/supabase/auth-fetch";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type DocumentListItem = {
@@ -67,8 +68,8 @@ export default function HomePage() {
   const fetchMeta = useCallback(async () => {
     try {
       const [tagsRes, foldersRes] = await Promise.all([
-        fetch("/api/v1/tags", { cache: "no-store" }),
-        fetch("/api/v1/folders", { cache: "no-store" })
+        authFetch("/api/v1/tags", { cache: "no-store" }),
+        authFetch("/api/v1/folders", { cache: "no-store" })
       ]);
       const tagsJson = await tagsRes.json();
       const foldersJson = await foldersRes.json();
@@ -81,7 +82,7 @@ export default function HomePage() {
 
   const fetchJobs = useCallback(async () => {
     try {
-      const response = await fetch("/api/v1/jobs?limit=3", { cache: "no-store" });
+      const response = await authFetch("/api/v1/jobs?limit=3", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) {
         setJobsError(data?.error?.message ?? "작업 내역을 불러오지 못했습니다.");
@@ -120,7 +121,7 @@ export default function HomePage() {
       if (tag?.trim()) params.set("tag", tag.trim());
       if (folderId?.trim()) params.set("folder_id", folderId.trim());
 
-      const response = await fetch(`/api/v1/documents?${params.toString()}`, { cache: "no-store" });
+      const response = await authFetch(`/api/v1/documents?${params.toString()}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error?.message ?? "문서를 불러오지 못했습니다.");
       setDocs(Array.isArray(data.items) ? data.items : []);
@@ -258,7 +259,7 @@ export default function HomePage() {
     setMessage(null);
 
     try {
-      const response = await fetch("/api/v1/documents/import", {
+      const response = await authFetch("/api/v1/documents/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -292,7 +293,7 @@ export default function HomePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch("/api/v1/folders", {
+      const response = await authFetch("/api/v1/folders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newFolderName.trim() })
@@ -315,7 +316,7 @@ export default function HomePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch("/api/v1/tags", {
+      const response = await authFetch("/api/v1/tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newTagName.trim() })
@@ -337,7 +338,7 @@ export default function HomePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/v1/tags/${id}`, { method: "DELETE" });
+      const response = await authFetch(`/api/v1/tags/${id}`, { method: "DELETE" });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error((data as { error?: { message?: string } })?.error?.message ?? "태그 삭제에 실패했습니다.");

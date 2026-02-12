@@ -1,13 +1,17 @@
 import { deleteDocument, getDocumentById, updateDocument } from "@/lib/repositories/archive";
 import { errorResponse, noContent, ok } from "@/lib/http";
 import { updateDocumentSchema } from "@/lib/validation";
+import { getUserIdFromRequest, unauthorized } from "@/lib/auth/user";
 
 type Context = { params: Promise<{ id: string }> };
 
-export async function GET(_: Request, context: Context) {
+export async function GET(request: Request, context: Context) {
   try {
+    const userId = await getUserIdFromRequest(request);
+    if (!userId) return unauthorized();
+
     const { id } = await context.params;
-    const data = await getDocumentById(id);
+    const data = await getDocumentById(userId, id);
     if (!data) return errorResponse("NOT_FOUND", "Document not found", 404);
     return ok(data);
   } catch (error) {
@@ -19,6 +23,9 @@ export async function GET(_: Request, context: Context) {
 
 export async function PATCH(request: Request, context: Context) {
   try {
+    const userId = await getUserIdFromRequest(request);
+    if (!userId) return unauthorized();
+
     const { id } = await context.params;
     const body = await request.json();
     const parsed = updateDocumentSchema.safeParse(body);
@@ -28,7 +35,7 @@ export async function PATCH(request: Request, context: Context) {
       });
     }
 
-    const updated = await updateDocument(id, parsed.data);
+    const updated = await updateDocument(userId, id, parsed.data);
     if (!updated) return errorResponse("NOT_FOUND", "Document not found", 404);
     return ok(updated);
   } catch (error) {
@@ -38,10 +45,13 @@ export async function PATCH(request: Request, context: Context) {
   }
 }
 
-export async function DELETE(_: Request, context: Context) {
+export async function DELETE(request: Request, context: Context) {
   try {
+    const userId = await getUserIdFromRequest(request);
+    if (!userId) return unauthorized();
+
     const { id } = await context.params;
-    await deleteDocument(id);
+    await deleteDocument(userId, id);
     return noContent();
   } catch (error) {
     return errorResponse("INTERNAL_ERROR", "Failed to delete document", 500, {

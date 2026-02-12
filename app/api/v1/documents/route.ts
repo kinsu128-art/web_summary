@@ -1,8 +1,12 @@
 import { listDocuments } from "@/lib/repositories/archive";
 import { errorResponse, getErrorMessage, isSchemaCacheError, ok } from "@/lib/http";
+import { getUserIdFromRequest, unauthorized } from "@/lib/auth/user";
 
 export async function GET(request: Request) {
   try {
+    const userId = await getUserIdFromRequest(request);
+    if (!userId) return unauthorized();
+
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
     const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? "20")));
@@ -15,6 +19,7 @@ export async function GET(request: Request) {
     const order = (searchParams.get("order") as "asc" | "desc" | null) ?? "desc";
 
     const result = await listDocuments({
+      userId,
       q,
       tag,
       folderId,

@@ -136,14 +136,14 @@ const fetchHtml = async (url: string) => {
   return await response.text();
 };
 
-export const runImportDocument = async (input: ImportInput) => {
-  const job = await createImportJob(input.url);
+export const runImportDocument = async (userId: string, input: ImportInput) => {
+  const job = await createImportJob(userId, input.url);
 
   try {
-    await updateImportJob(job.id, { status: "fetching", progress: 15, error_message: null });
+    await updateImportJob(userId, job.id, { status: "fetching", progress: 15, error_message: null });
     const rawHtml = await fetchHtml(input.url);
 
-    await updateImportJob(job.id, { status: "extracting", progress: 45 });
+    await updateImportJob(userId, job.id, { status: "extracting", progress: 45 });
     const dom = new JSDOM(rawHtml, { url: input.url });
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
@@ -160,8 +160,9 @@ export const runImportDocument = async (input: ImportInput) => {
     const language = dom.window.document.documentElement.lang?.trim() || "ko";
     const finalTitle = trimText(article.title, 180) ?? "Untitled";
 
-    await updateImportJob(job.id, { status: "saving", progress: 75 });
+    await updateImportJob(userId, job.id, { status: "saving", progress: 75 });
     const document = await createDocument({
+      user_id: userId,
       source_url: input.url,
       canonical_url: input.url,
       source_domain: normalizeDomain(input.url),
@@ -186,13 +187,13 @@ export const runImportDocument = async (input: ImportInput) => {
     });
 
     if (input.tags && input.tags.length > 0) {
-      await replaceDocumentTags(document.id, input.tags);
+      await replaceDocumentTags(userId, document.id, input.tags);
     }
     if (input.folder_ids && input.folder_ids.length > 0) {
-      await replaceDocumentFolders(document.id, input.folder_ids);
+      await replaceDocumentFolders(userId, document.id, input.folder_ids);
     }
 
-    await updateImportJob(job.id, {
+    await updateImportJob(userId, job.id, {
       status: "done",
       progress: 100,
       document_id: document.id,
@@ -201,7 +202,7 @@ export const runImportDocument = async (input: ImportInput) => {
 
     return { job_id: job.id, status: "done", document_id: document.id };
   } catch (error) {
-    await updateImportJob(job.id, {
+    await updateImportJob(userId, job.id, {
       status: "failed",
       progress: 100,
       error_message: error instanceof Error ? error.message : "Import failed"
@@ -210,23 +211,23 @@ export const runImportDocument = async (input: ImportInput) => {
   }
 };
 
-export const rerunExtractionForDocument = async (documentId: string) => {
-  const source = await getDocumentSourceById(documentId);
+export const rerunExtractionForDocument = async (userId: string, documentId: string) => {
+  const source = await getDocumentSourceById(userId, documentId);
   if (!source) {
     throw new Error("Document not found");
   }
 
-  const job = await createImportJob(source.source_url);
+  const job = await createImportJob(userId, source.source_url);
 
   try {
-    await updateImportJob(job.id, {
+    await updateImportJob(userId, job.id, {
       status: "fetching",
       progress: 15,
       error_message: null
     });
     const rawHtml = await fetchHtml(source.source_url);
 
-    await updateImportJob(job.id, { status: "extracting", progress: 45 });
+    await updateImportJob(userId, job.id, { status: "extracting", progress: 45 });
     const dom = new JSDOM(rawHtml, { url: source.source_url });
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
@@ -239,8 +240,8 @@ export const rerunExtractionForDocument = async (documentId: string) => {
     const language = dom.window.document.documentElement.lang?.trim() || "ko";
     const finalTitle = trimText(article.title, 180) ?? "Untitled";
 
-    await updateImportJob(job.id, { status: "saving", progress: 75 });
-    await overwriteDocumentFromExtraction(documentId, {
+    await updateImportJob(userId, job.id, { status: "saving", progress: 75 });
+    await overwriteDocumentFromExtraction(userId, documentId, {
       title: finalTitle,
       excerpt: trimText(article.excerpt),
       content_markdown: markdown,
@@ -262,14 +263,14 @@ export const rerunExtractionForDocument = async (documentId: string) => {
       error_message: null
     });
 
-    await updateImportJob(job.id, {
+    await updateImportJob(userId, job.id, {
       status: "done",
       progress: 100,
       document_id: documentId,
       error_message: null
     });
 
-    const updated = await getDocumentById(documentId);
+    const updated = await getDocumentById(userId, documentId);
     return {
       job_id: job.id,
       status: "done",
@@ -277,7 +278,7 @@ export const rerunExtractionForDocument = async (documentId: string) => {
       document: updated
     };
   } catch (error) {
-    await updateImportJob(job.id, {
+    await updateImportJob(userId, job.id, {
       status: "failed",
       progress: 100,
       document_id: documentId,

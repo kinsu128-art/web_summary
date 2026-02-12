@@ -1,12 +1,16 @@
 import { errorResponse, getErrorMessage, isSchemaCacheError, ok } from "@/lib/http";
 import { ConfigError } from "@/lib/env";
 import { listJobs } from "@/lib/repositories/archive";
+import { getUserIdFromRequest, unauthorized } from "@/lib/auth/user";
 
 export async function GET(request: Request) {
   try {
+    const userId = await getUserIdFromRequest(request);
+    if (!userId) return unauthorized();
+
     const { searchParams } = new URL(request.url);
     const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? "20")));
-    const items = await listJobs(limit);
+    const items = await listJobs(userId, limit);
     return ok({ items });
   } catch (error) {
     if (error instanceof ConfigError) {
