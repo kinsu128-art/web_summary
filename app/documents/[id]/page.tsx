@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -13,22 +13,39 @@ type DocumentDetail = {
   source_url: string;
   content_markdown: string;
   tags: string[];
+  folder_ids?: string[];
   created_at: string;
   updated_at: string;
 };
 
+type FolderItem = { id: string; name: string };
+
 export default function DocumentDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = params?.id;
   const [doc, setDoc] = useState<DocumentDetail | null>(null);
+  const [folders, setFolders] = useState<FolderItem[]>([]);
   const [editMode, setEditMode] = useState(false);
   const [titleInput, setTitleInput] = useState("");
   const [tagsInput, setTagsInput] = useState("");
   const [markdownInput, setMarkdownInput] = useState("");
+  const [folderIdInput, setFolderIdInput] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const loadFolders = useCallback(async () => {
+    try {
+      const response = await fetch("/api/v1/folders", { cache: "no-store" });
+      const data = await response.json();
+      if (response.ok && Array.isArray(data.items)) setFolders(data.items);
+    } catch {
+      // no-op
+    }
+  }, []);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -43,6 +60,7 @@ export default function DocumentDetailPage() {
       setTitleInput(data.user_title ?? "");
       setTagsInput((data.tags ?? []).join(", "));
       setMarkdownInput(data.content_markdown ?? "");
+      setFolderIdInput(data.folder_ids?.[0] ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load document.");
     } finally {
@@ -52,7 +70,8 @@ export default function DocumentDetailPage() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadFolders();
+  }, [load, loadFolders]);
 
   const parsedTags = useMemo(
     () =>
@@ -75,7 +94,8 @@ export default function DocumentDetailPage() {
         body: JSON.stringify({
           user_title: titleInput.trim() ? titleInput.trim() : null,
           content_markdown: markdownInput,
-          tags: parsedTags
+          tags: parsedTags,
+          folder_ids: folderIdInput ? [folderIdInput] : []
         })
       });
       const data = await response.json();
@@ -90,6 +110,26 @@ export default function DocumentDetailPage() {
     }
   };
 
+  const removeDocument = async () => {
+    if (!id) return;
+    const confirmed = window.confirm("Delete this document?");
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/v1/documents/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error((data as { error?: { message?: string } })?.error?.message ?? "Failed to delete.");
+      }
+      router.push("/");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete.");
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <main className="shell">
       <section className="panel">
@@ -99,6 +139,9 @@ export default function DocumentDetailPage() {
             <Link href="/">Back</Link>
             <button onClick={() => setEditMode((v) => !v)} type="button">
               {editMode ? "Cancel" : "Edit"}
+            </button>
+            <button className="danger-btn" disabled={isDeleting} onClick={removeDocument} type="button">
+              {isDeleting ? "Deleting..." : "Delete"}
             </button>
           </div>
         </div>
@@ -127,6 +170,17 @@ export default function DocumentDetailPage() {
                 <label>
                   Tags (comma separated)
                   <input value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} />
+                </label>
+                <label>
+                  Folder
+                  <select value={folderIdInput} onChange={(e) => setFolderIdInput(e.target.value)}>
+                    <option value="">None</option>
+                    {folders.map((folder) => (
+                      <option key={folder.id} value={folder.id}>
+                        {folder.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
                   Markdown

@@ -27,6 +27,8 @@ export default function HomePage() {
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [tagsInput, setTagsInput] = useState("");
+  const [importFolderId, setImportFolderId] = useState("");
+  const [newFolderName, setNewFolderName] = useState("");
   const [q, setQ] = useState("");
   const [selectedTag, setSelectedTag] = useState("");
   const [selectedFolder, setSelectedFolder] = useState("");
@@ -35,6 +37,7 @@ export default function HomePage() {
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,6 +110,7 @@ export default function HomePage() {
           url: url.trim(),
           title: title.trim() || undefined,
           tags: parsedTags.length > 0 ? parsedTags : undefined,
+          folder_ids: importFolderId ? [importFolderId] : undefined,
           save_raw_html: false
         })
       });
@@ -117,12 +121,36 @@ export default function HomePage() {
       setUrl("");
       setTitle("");
       setTagsInput("");
+      setImportFolderId("");
       await fetchDocuments(q, selectedTag, selectedFolder);
       await fetchMeta();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed.");
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  const createFolder = async () => {
+    if (!newFolderName.trim()) return;
+    setIsCreatingFolder(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/v1/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newFolderName.trim() })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error?.message ?? "Failed to create folder.");
+      setNewFolderName("");
+      setMessage("Folder created.");
+      await fetchMeta();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create folder.");
+    } finally {
+      setIsCreatingFolder(false);
     }
   };
 
@@ -152,10 +180,27 @@ export default function HomePage() {
               <input value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="react, hooks" />
             </label>
           </div>
+          <label>
+            Folder (optional)
+            <select value={importFolderId} onChange={(e) => setImportFolderId(e.target.value)}>
+              <option value="">None</option>
+              {folders.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <button disabled={isImporting} type="submit">
             {isImporting ? "Importing..." : "Clean and Save"}
           </button>
         </form>
+        <div className="inline-create">
+          <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="New folder name" />
+          <button disabled={isCreatingFolder} onClick={createFolder} type="button">
+            {isCreatingFolder ? "Creating..." : "Create Folder"}
+          </button>
+        </div>
         {message && <p className="notice ok">{message}</p>}
         {error && <p className="notice err">{error}</p>}
       </section>

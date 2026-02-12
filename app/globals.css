@@ -133,6 +133,10 @@ button:disabled {
   cursor: default;
 }
 
+.danger-btn {
+  background: #b91c1c;
+}
+
 .notice {
   margin: 12px 0 0;
   border-radius: 10px;
@@ -165,6 +169,13 @@ button:disabled {
   grid-template-columns: 1fr 1fr auto;
   gap: 10px;
   align-items: end;
+}
+
+.inline-create {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
 }
 
 .list {
@@ -307,6 +318,10 @@ code {
   }
 
   .filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-create {
     grid-template-columns: 1fr;
   }
 }
