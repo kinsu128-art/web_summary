@@ -1,6 +1,7 @@
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import TurndownService from "turndown";
+import { gfm } from "turndown-plugin-gfm";
 import { createHash } from "node:crypto";
 import {
   createCapture,
@@ -23,6 +24,7 @@ const turndown = new TurndownService({
   headingStyle: "atx",
   codeBlockStyle: "fenced"
 });
+turndown.use(gfm);
 
 const trimText = (value: string | null | undefined, max = 280) => {
   if (!value) return null;
