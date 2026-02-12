@@ -14,8 +14,14 @@ export async function GET(request: Request) {
         missing: error.message
       });
     }
+    const reason =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null && "message" in error
+          ? String((error as { message?: unknown }).message)
+          : "unknown";
     return errorResponse("INTERNAL_ERROR", "Failed to load jobs", 500, {
-      reason: error instanceof Error ? error.message : "unknown"
+      reason
     });
   }
 }
