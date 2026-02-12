@@ -95,7 +95,24 @@ input {
   background: #fff;
 }
 
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+  color: var(--ink);
+  background: #fff;
+}
+
 input:focus {
+  outline: 2px solid #bbf7d0;
+  border-color: #86efac;
+}
+
+select:focus,
+textarea:focus {
   outline: 2px solid #bbf7d0;
   border-color: #86efac;
 }
@@ -140,6 +157,14 @@ button:disabled {
 
 .search input {
   min-width: 220px;
+}
+
+.filter-row {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
 }
 
 .list {
@@ -210,6 +235,53 @@ button:disabled {
   font-size: 13px;
 }
 
+.editor {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.markdown-body {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 16px;
+  line-height: 1.7;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin: 20px 0 10px;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol {
+  margin: 10px 0;
+}
+
+.markdown-body pre {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #eef2f7;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--line);
+  padding: 8px;
+  text-align: left;
+}
+
 code {
   background: #f3f4f6;
   padding: 2px 6px;
@@ -232,5 +304,9 @@ code {
 
   .search input {
     min-width: 0;
+  }
+
+  .filter-row {
+    grid-template-columns: 1fr;
   }
 }
