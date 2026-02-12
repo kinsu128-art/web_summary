@@ -33,3 +33,8 @@ export const updateFolderSchema = z
     description: z.string().trim().nullable().optional()
   })
   .strict();
+
+export const authSignUpSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(8)
+});

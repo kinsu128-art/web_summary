@@ -9,11 +9,11 @@ type AuthMode = "login" | "signup";
 
 const mapAuthErrorMessage = (message: string) => {
   const lower = message.toLowerCase();
-  if (lower.includes("signups not allowed") || lower.includes("signup is disabled")) {
-    return "현재 Supabase에서 이메일 회원가입이 비활성화되어 있습니다. Supabase Dashboard > Authentication > Providers > Email에서 회원가입을 활성화해 주세요.";
-  }
   if (lower.includes("email not confirmed")) {
-    return "이메일 인증이 완료되지 않았습니다. 받은편지함에서 인증 링크를 클릭한 뒤 다시 로그인해 주세요.";
+    return "이메일 인증이 완료되지 않았습니다. 인증 링크를 클릭한 뒤 다시 로그인해 주세요.";
+  }
+  if (lower.includes("invalid login credentials")) {
+    return "이메일 또는 비밀번호가 올바르지 않습니다.";
   }
   return message;
 };
@@ -34,6 +34,36 @@ export default function LoginPage() {
     });
   }, [router]);
 
+  const handleLogin = async () => {
+    const supabase = getSupabaseBrowser();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password
+    });
+    if (signInError) throw signInError;
+
+    setMessage("로그인되었습니다.");
+    router.replace("/");
+    router.refresh();
+  };
+
+  const handleSignup = async () => {
+    const signupResponse = await fetch("/api/v1/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), password })
+    });
+
+    if (!signupResponse.ok) {
+      const body = await signupResponse.json().catch(() => ({}));
+      const text =
+        (body as { error?: { message?: string } })?.error?.message ?? "회원가입 처리에 실패했습니다.";
+      throw new Error(text);
+    }
+
+    await handleLogin();
+  };
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -44,35 +74,17 @@ export default function LoginPage() {
       return;
     }
 
+    if (password.length < 8) {
+      setError("비밀번호는 8자 이상이어야 합니다.");
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const supabase = getSupabaseBrowser();
-
       if (mode === "login") {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password
-        });
-        if (signInError) throw signInError;
-        setMessage("로그인에 성공했습니다.");
-        router.replace("/");
-        router.refresh();
-        return;
-      }
-
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password
-      });
-      if (signUpError) throw signUpError;
-
-      if (data.session) {
-        setMessage("회원가입과 로그인이 완료되었습니다.");
-        router.replace("/");
-        router.refresh();
+        await handleLogin();
       } else {
-        setMessage("회원가입이 완료되었습니다. 이메일 인증 후 로그인해 주세요.");
-        setMode("login");
+        await handleSignup();
       }
     } catch (err) {
       const raw = err instanceof Error ? err.message : "처리 중 오류가 발생했습니다.";
@@ -87,9 +99,7 @@ export default function LoginPage() {
       <section className="panel auth-panel">
         <h1>{mode === "login" ? "로그인" : "회원가입"}</h1>
         <p className="auth-desc">
-          {mode === "login"
-            ? "인수의 공부노트를 사용하려면 로그인해 주세요."
-            : "이메일과 비밀번호로 새 계정을 만들 수 있습니다."}
+          {mode === "login" ? "이메일로 로그인해 주세요." : "새 계정을 만들고 바로 로그인합니다."}
         </p>
 
         <div className="auth-switch">
