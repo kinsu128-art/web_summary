@@ -34,7 +34,7 @@ const trimText = (value: string | null | undefined, max = 280) => {
   const compact = value.replace(/\s+/g, " ").trim();
   if (!compact) return null;
   if (compact.length <= max) return compact;
-  return `${compact.slice(0, max - 1)}…`;
+  return `${compact.slice(0, max - 3)}...`;
 };
 
 const normalizeDomain = (url: string) => {
@@ -62,7 +62,62 @@ const normalizeContentImages = (html: string, baseUrl: string) => {
   return document.body.innerHTML;
 };
 
-const toMarkdown = (html: string) => turndown.turndown(html).trim();
+const normalizeCellText = (value: string) =>
+  value
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\|/g, "\\|");
+
+const htmlTableToMarkdown = (tableHtml: string) => {
+  const dom = new JSDOM(`<body>${tableHtml}</body>`);
+  const table = dom.window.document.querySelector("table");
+  if (!table) return "";
+
+  const allRows = Array.from(table.querySelectorAll("tr")).map((row) =>
+    Array.from(row.querySelectorAll("th,td")).map((cell) => normalizeCellText(cell.textContent ?? ""))
+  );
+
+  const meaningfulRows = allRows.filter((row) => row.some((cell) => cell.length > 0));
+  if (meaningfulRows.length === 0) return "";
+
+  const hasThead = table.querySelector("thead tr") !== null;
+  const firstRowCells = meaningfulRows[0];
+  const firstRowIsHeader = firstRowCells.length > 0 && hasThead;
+  const columnCount = meaningfulRows.reduce((max, row) => Math.max(max, row.length), firstRowCells.length);
+  if (columnCount === 0) return "";
+
+  const padRow = (row: string[]) => {
+    const padded = [...row];
+    while (padded.length < columnCount) padded.push("");
+    return padded.slice(0, columnCount);
+  };
+
+  let header = firstRowIsHeader
+    ? padRow(firstRowCells)
+    : Array.from({ length: columnCount }, (_, i) => `Column ${i + 1}`);
+
+  if (header.every((cell) => cell.length === 0)) {
+    header = Array.from({ length: columnCount }, (_, i) => `Column ${i + 1}`);
+  }
+
+  const bodyRows = firstRowIsHeader ? meaningfulRows.slice(1).map(padRow) : meaningfulRows.map(padRow);
+
+  const renderRow = (row: string[]) => `| ${row.join(" | ")} |`;
+  const separator = `| ${Array.from({ length: columnCount }, () => "---").join(" | ")} |`;
+
+  return [renderRow(header), separator, ...bodyRows.map(renderRow)].join("\n");
+};
+
+const convertHtmlTablesInMarkdown = (markdown: string) =>
+  markdown.replace(/<table[\s\S]*?<\/table>/gi, (tableBlock) => {
+    const tableMarkdown = htmlTableToMarkdown(tableBlock);
+    return tableMarkdown ? `\n\n${tableMarkdown}\n\n` : "";
+  });
+
+const toMarkdown = (html: string) => {
+  const markdown = turndown.turndown(html).trim();
+  return convertHtmlTablesInMarkdown(markdown).trim();
+};
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 

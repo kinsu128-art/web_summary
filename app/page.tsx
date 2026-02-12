@@ -345,35 +345,6 @@ export default function HomePage() {
 
       <section className="panel">
         <div className="panel-head">
-          <h2>Recent Import Jobs</h2>
-          <button onClick={() => void fetchJobs()} type="button">
-            Refresh
-          </button>
-        </div>
-        {jobsError ? <p className="notice err">{jobsError}</p> : null}
-        <div className="list">
-          {jobs.map((job) => (
-            <article key={job.id} className="item">
-              <div className="item-head">
-                <h3>{job.status.toUpperCase()}</h3>
-                <span>{formatDate(job.created_at)}</span>
-              </div>
-              <p className="excerpt">{job.url}</p>
-              <p className="meta">
-                <span>Progress: {job.progress}%</span>
-                <span>{job.error_message ? `Error: ${job.error_message}` : "No error"}</span>
-              </p>
-              <div className="actions">
-                {job.document_id ? <Link href={`/documents/${job.document_id}`}>Open Document</Link> : null}
-              </div>
-            </article>
-          ))}
-          {jobs.length === 0 ? <p>No jobs yet.</p> : null}
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
           <h2>Archive</h2>
           <div className="search">
             <input
@@ -438,6 +409,35 @@ export default function HomePage() {
             </article>
           ))}
           {!isLoading && docs.length === 0 ? <p>No documents yet.</p> : null}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Recent Import Jobs</h2>
+          <button onClick={() => void fetchJobs()} type="button">
+            Refresh
+          </button>
+        </div>
+        {jobsError ? <p className="notice err">{jobsError}</p> : null}
+        <div className="list">
+          {jobs.map((job) => (
+            <article key={job.id} className="item">
+              <div className="item-head">
+                <h3>{job.status.toUpperCase()}</h3>
+                <span>{formatDate(job.created_at)}</span>
+              </div>
+              <p className="excerpt">{job.url}</p>
+              <p className="meta">
+                <span>Progress: {job.progress}%</span>
+                <span>{job.error_message ? `Error: ${job.error_message}` : "No error"}</span>
+              </p>
+              <div className="actions">
+                {job.document_id ? <Link href={`/documents/${job.document_id}`}>Open Document</Link> : null}
+              </div>
+            </article>
+          ))}
+          {jobs.length === 0 ? <p>No jobs yet.</p> : null}
         </div>
       </section>
     </main>
