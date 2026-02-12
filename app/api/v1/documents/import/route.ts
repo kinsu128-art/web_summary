@@ -21,8 +21,9 @@ export async function POST(request: Request) {
     const result = await runImportDocument(userId, parsed.data);
     return ok(result, 202);
   } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown";
     return errorResponse("INTERNAL_ERROR", "Failed to import document", 500, {
-      reason: error instanceof Error ? error.message : "unknown"
+      reason
     });
   }
 }

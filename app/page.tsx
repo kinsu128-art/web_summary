@@ -272,7 +272,11 @@ export default function HomePage() {
         })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error?.message ?? "가져오기에 실패했습니다.");
+      if (!response.ok) {
+        const messageText = data?.error?.message ?? "가져오기에 실패했습니다.";
+        const reasonText = data?.error?.details?.reason;
+        throw new Error(reasonText ? `${messageText} (${reasonText})` : messageText);
+      }
 
       setMessage("저장되었습니다.");
       setUrl("");

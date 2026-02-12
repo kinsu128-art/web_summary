@@ -168,16 +168,25 @@ const toMarkdown = (html: string) => {
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
 const fetchHtml = async (url: string) => {
-  const response = await fetch(url, {
+  const target = new URL(url).toString();
+  const origin = new URL(target).origin;
+  const response = await fetch(target, {
     headers: {
       "user-agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari",
-      accept: "text/html,application/xhtml+xml"
+      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+      referer: `${origin}/`,
+      "cache-control": "no-cache"
     }
   });
 
   if (!response.ok) {
-    throw new Error(`Fetch failed with status ${response.status}`);
+    const text = await response.text().catch(() => "");
+    const excerpt = text.replace(/\s+/g, " ").slice(0, 180);
+    throw new Error(
+      `Fetch failed with status ${response.status}${excerpt ? `: ${excerpt}` : ""}`
+    );
   }
   return await response.text();
 };
