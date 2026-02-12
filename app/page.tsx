@@ -39,6 +39,7 @@ export default function HomePage() {
   const router = useRouter();
   const [authReady, setAuthReady] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isAccountActionRunning, setIsAccountActionRunning] = useState(false);
 
   const [url, setUrl] = useState("");
@@ -141,9 +142,11 @@ export default function HomePage() {
       if (!data.session) {
         setAuthReady(true);
         setIsAuthed(false);
+        setIsAdmin(false);
         router.replace("/login");
         return;
       }
+      setIsAdmin((data.session.user.email ?? "").toLowerCase() === "kinsu128@gmail.com");
       setIsAuthed(true);
       setAuthReady(true);
     });
@@ -153,10 +156,12 @@ export default function HomePage() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         setIsAuthed(false);
+        setIsAdmin(false);
         setAuthReady(true);
         router.replace("/login");
         return;
       }
+      setIsAdmin((session.user.email ?? "").toLowerCase() === "kinsu128@gmail.com");
       setIsAuthed(true);
       setAuthReady(true);
     });
@@ -368,6 +373,7 @@ export default function HomePage() {
         <h1>인수의 공부노트</h1>
         <p>공부용 웹페이지를 깔끔하게 저장하는 아카이브</p>
         <div className="topbar-actions">
+          {isAdmin ? <Link href="/admin/users">사용자 관리</Link> : null}
           <button disabled={isAccountActionRunning} onClick={signOut} type="button">
             로그아웃
           </button>
