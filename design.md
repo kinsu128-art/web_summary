@@ -37,6 +37,13 @@ Reference template: `.env.example`
 3. Deploy to production
 4. Validate API health after first deploy
 
+## 5.1 Current deployment status (2026-02-12)
+- GitHub repository: `https://github.com/kinsu128-art/web_summary`
+- Vercel project: `kinsu128s-projects/web_summary`
+- Production URL:
+  - `https://websummary.vercel.app`
+  - `https://websummary-m7j4wakfu-kinsu128s-projects.vercel.app`
+
 ## 6. Security baseline
 - Keep service role key only in server runtime
 - Never expose service role key to browser/client bundle
