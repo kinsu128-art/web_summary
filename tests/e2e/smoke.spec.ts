@@ -10,6 +10,11 @@ test("jobs endpoint does not return 500", async ({ request }) => {
   expect([200, 503]).toContain(response.status());
 });
 
+test("system setup endpoint does not return 500", async ({ request }) => {
+  const response = await request.get("/api/v1/system/setup");
+  expect([200, 503]).toContain(response.status());
+});
+
 test("home page renders key sections", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "web_summary" })).toBeVisible();

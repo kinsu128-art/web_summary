@@ -14,11 +14,15 @@ Web study archive app scaffold with Next.js, Supabase, and Vercel.
 - API contract: `api/openapi.yaml`
 - SQLite draft migration (legacy): `db/migrations/0001_init.sql`
 - Supabase migration (active): `supabase/migrations/202602120001_init.sql`
+- Supabase hardening migration: `supabase/migrations/202602120002_constraints.sql`
+- Supabase setup check SQL: `supabase/sql/setup_check.sql`
 
 ## Local setup
 1. Copy `.env.example` to `.env.local`
 2. Fill Supabase and runtime variables
 3. Apply migration SQL in Supabase
+   - `supabase/migrations/202602120001_init.sql`
+   - `supabase/migrations/202602120002_constraints.sql`
 4. Install dependencies: `npm install`
 5. Run dev server: `npm run dev`
 
@@ -29,6 +33,7 @@ Web study archive app scaffold with Next.js, Supabase, and Vercel.
 
 ## Implemented endpoints
 - `GET /api/health`
+- `GET /api/v1/system/setup`
 - `POST /api/v1/documents/import`
 - `GET /api/v1/documents`
 - `GET/PATCH/DELETE /api/v1/documents/{id}`
@@ -46,3 +51,8 @@ Web study archive app scaffold with Next.js, Supabase, and Vercel.
   - document/capture save
   - tag/folder mapping
   - import job status updates (`queued -> fetching -> extracting -> saving -> done|failed`)
+
+## Supabase setup verification
+1. Run `supabase/sql/setup_check.sql` in Supabase SQL Editor
+2. Call `GET /api/v1/system/setup`
+3. Confirm `all_ok: true`
