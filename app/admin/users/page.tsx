@@ -119,6 +119,7 @@ export default function AdminUsersPage() {
             <button onClick={() => void loadUsers()} type="button">
               새로고침
             </button>
+            <Link href="/admin">관리 홈</Link>
             <Link href="/">메인으로</Link>
           </div>
         </div>

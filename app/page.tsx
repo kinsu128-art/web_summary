@@ -55,8 +55,6 @@ export default function HomePage() {
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
-  const [setupOk, setSetupOk] = useState<boolean | null>(null);
-  const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -93,22 +91,6 @@ export default function HomePage() {
       setJobs(Array.isArray(data.items) ? data.items.slice(0, 3) : []);
     } catch {
       setJobsError("작업 내역을 불러오지 못했습니다.");
-    }
-  }, []);
-
-  const fetchSetup = useCallback(async () => {
-    try {
-      const response = await fetch("/api/v1/system/setup", { cache: "no-store" });
-      if (response.ok) {
-        setSetupOk(true);
-        setSetupMessage("최종 상태: OK");
-        return;
-      }
-      setSetupOk(false);
-      setSetupMessage("최종 상태: FAIL");
-    } catch {
-      setSetupOk(false);
-      setSetupMessage("최종 상태: FAIL");
     }
   }, []);
 
@@ -176,9 +158,8 @@ export default function HomePage() {
     if (!authReady || !isAuthed) return;
     void fetchMeta();
     void fetchJobs();
-    void fetchSetup();
     void fetchDocuments();
-  }, [authReady, isAuthed, fetchDocuments, fetchJobs, fetchMeta, fetchSetup]);
+  }, [authReady, isAuthed, fetchDocuments, fetchJobs, fetchMeta]);
 
   useEffect(() => {
     if (!authReady || !isAuthed) return;
@@ -373,7 +354,7 @@ export default function HomePage() {
         <h1>인수의 공부노트</h1>
         <p>공부용 웹페이지를 깔끔하게 저장하는 아카이브</p>
         <div className="topbar-actions">
-          {isAdmin ? <Link href="/admin/users">사용자 관리</Link> : null}
+          {isAdmin ? <Link href="/admin">관리 페이지</Link> : null}
           <button disabled={isAccountActionRunning} onClick={signOut} type="button">
             로그아웃
           </button>
@@ -382,16 +363,6 @@ export default function HomePage() {
           </button>
         </div>
       </header>
-
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Supabase Setup Health</h2>
-          <button onClick={() => void fetchSetup()} type="button">
-            Check Again
-          </button>
-        </div>
-        {setupMessage ? <p className={`notice ${setupOk ? "ok" : "err"}`}>{setupMessage}</p> : null}
-      </section>
 
       <section className="panel">
         <h2>Import URL</h2>
