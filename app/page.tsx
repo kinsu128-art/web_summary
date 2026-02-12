@@ -51,6 +51,7 @@ export default function HomePage() {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
+  const [jobsError, setJobsError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,10 +74,14 @@ export default function HomePage() {
     try {
       const response = await fetch("/api/v1/jobs?limit=12", { cache: "no-store" });
       const data = await response.json();
-      if (!response.ok) return;
+      if (!response.ok) {
+        setJobsError(data?.error?.message ?? "Failed to load jobs.");
+        return;
+      }
+      setJobsError(null);
       setJobs(Array.isArray(data.items) ? data.items : []);
     } catch {
-      // no-op
+      setJobsError("Failed to load jobs.");
     }
   }, []);
 
@@ -310,6 +315,7 @@ export default function HomePage() {
             Refresh
           </button>
         </div>
+        {jobsError ? <p className="notice err">{jobsError}</p> : null}
         <div className="list">
           {jobs.map((job) => (
             <article key={job.id} className="item">
