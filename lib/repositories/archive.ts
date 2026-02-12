@@ -214,6 +214,16 @@ export const getJobById = async (id: string) => {
   return data;
 };
 
+export const listJobs = async (limit = 20) => {
+  const { data, error } = await db()
+    .from("import_jobs")
+    .select("id,url,status,progress,document_id,error_message,created_at,updated_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+};
+
 export const listTags = async () => {
   const { data, error } = await db().from("tags").select("id,name,color,created_at").order("name");
   if (error) throw error;

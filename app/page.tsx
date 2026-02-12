@@ -15,6 +15,15 @@ type DocumentListItem = {
 
 type TagItem = { id: string; name: string };
 type FolderItem = { id: string; name: string };
+type JobItem = {
+  id: string;
+  url: string;
+  status: "queued" | "fetching" | "extracting" | "saving" | "done" | "failed";
+  progress: number;
+  document_id: string | null;
+  error_message: string | null;
+  created_at: string;
+};
 
 const formatDate = (iso: string) =>
   new Intl.DateTimeFormat("ko-KR", {
@@ -29,21 +38,28 @@ export default function HomePage() {
   const [tagsInput, setTagsInput] = useState("");
   const [importFolderId, setImportFolderId] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
+  const [newTagName, setNewTagName] = useState("");
   const [q, setQ] = useState("");
   const [selectedTag, setSelectedTag] = useState("");
   const [selectedFolder, setSelectedFolder] = useState("");
   const [docs, setDocs] = useState<DocumentListItem[]>([]);
+  const [jobs, setJobs] = useState<JobItem[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [isCreatingTag, setIsCreatingTag] = useState(false);
+  const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMeta = useCallback(async () => {
     try {
-      const [tagsRes, foldersRes] = await Promise.all([fetch("/api/v1/tags", { cache: "no-store" }), fetch("/api/v1/folders", { cache: "no-store" })]);
+      const [tagsRes, foldersRes] = await Promise.all([
+        fetch("/api/v1/tags", { cache: "no-store" }),
+        fetch("/api/v1/folders", { cache: "no-store" })
+      ]);
       const tagsJson = await tagsRes.json();
       const foldersJson = await foldersRes.json();
       if (tagsRes.ok) setTags(Array.isArray(tagsJson.items) ? tagsJson.items : []);
@@ -53,34 +69,52 @@ export default function HomePage() {
     }
   }, []);
 
-  const fetchDocuments = useCallback(
-    async (query?: string, tag?: string, folderId?: string) => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        params.set("limit", "30");
-        if (query?.trim()) params.set("q", query.trim());
-        if (tag?.trim()) params.set("tag", tag.trim());
-        if (folderId?.trim()) params.set("folder_id", folderId.trim());
+  const fetchJobs = useCallback(async () => {
+    try {
+      const response = await fetch("/api/v1/jobs?limit=12", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) return;
+      setJobs(Array.isArray(data.items) ? data.items : []);
+    } catch {
+      // no-op
+    }
+  }, []);
 
-        const response = await fetch(`/api/v1/documents?${params.toString()}`, { cache: "no-store" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data?.error?.message ?? "Failed to load documents.");
-        setDocs(Array.isArray(data.items) ? data.items : []);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load documents.");
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
-  );
+  const fetchDocuments = useCallback(async (query?: string, tag?: string, folderId?: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "30");
+      if (query?.trim()) params.set("q", query.trim());
+      if (tag?.trim()) params.set("tag", tag.trim());
+      if (folderId?.trim()) params.set("folder_id", folderId.trim());
+
+      const response = await fetch(`/api/v1/documents?${params.toString()}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error?.message ?? "Failed to load documents.");
+      setDocs(Array.isArray(data.items) ? data.items : []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load documents.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void fetchMeta();
+    void fetchJobs();
     void fetchDocuments();
-  }, [fetchDocuments, fetchMeta]);
+  }, [fetchDocuments, fetchJobs, fetchMeta]);
+
+  useEffect(() => {
+    const hasRunning = jobs.some((job) => job.status !== "done" && job.status !== "failed");
+    if (!hasRunning) return;
+    const timer = window.setInterval(() => {
+      void fetchJobs();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [jobs, fetchJobs]);
 
   const parsedTags = useMemo(
     () =>
@@ -122,10 +156,10 @@ export default function HomePage() {
       setTitle("");
       setTagsInput("");
       setImportFolderId("");
-      await fetchDocuments(q, selectedTag, selectedFolder);
-      await fetchMeta();
+      await Promise.all([fetchDocuments(q, selectedTag, selectedFolder), fetchMeta(), fetchJobs()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed.");
+      await fetchJobs();
     } finally {
       setIsImporting(false);
     }
@@ -151,6 +185,48 @@ export default function HomePage() {
       setError(e instanceof Error ? e.message : "Failed to create folder.");
     } finally {
       setIsCreatingFolder(false);
+    }
+  };
+
+  const createTag = async () => {
+    if (!newTagName.trim()) return;
+    setIsCreatingTag(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/v1/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newTagName.trim() })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error?.message ?? "Failed to create tag.");
+      setNewTagName("");
+      setMessage("Tag created.");
+      await fetchMeta();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create tag.");
+    } finally {
+      setIsCreatingTag(false);
+    }
+  };
+
+  const removeTag = async (id: string) => {
+    setDeletingTagId(id);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/v1/tags/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error((data as { error?: { message?: string } })?.error?.message ?? "Failed to delete tag.");
+      }
+      setMessage("Tag deleted.");
+      await Promise.all([fetchMeta(), fetchDocuments(q, selectedTag, selectedFolder)]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete tag.");
+    } finally {
+      setDeletingTagId(null);
     }
   };
 
@@ -201,8 +277,58 @@ export default function HomePage() {
             {isCreatingFolder ? "Creating..." : "Create Folder"}
           </button>
         </div>
+        <div className="inline-create">
+          <input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="New tag name" />
+          <button disabled={isCreatingTag} onClick={createTag} type="button">
+            {isCreatingTag ? "Creating..." : "Create Tag"}
+          </button>
+        </div>
+        {tags.length > 0 ? (
+          <div className="chip-row">
+            {tags.map((tag) => (
+              <button
+                key={tag.id}
+                className="chip"
+                disabled={deletingTagId === tag.id}
+                onClick={() => void removeTag(tag.id)}
+                title="Delete tag"
+                type="button"
+              >
+                #{tag.name} {deletingTagId === tag.id ? "..." : "x"}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {message && <p className="notice ok">{message}</p>}
         {error && <p className="notice err">{error}</p>}
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Recent Import Jobs</h2>
+          <button onClick={() => void fetchJobs()} type="button">
+            Refresh
+          </button>
+        </div>
+        <div className="list">
+          {jobs.map((job) => (
+            <article key={job.id} className="item">
+              <div className="item-head">
+                <h3>{job.status.toUpperCase()}</h3>
+                <span>{formatDate(job.created_at)}</span>
+              </div>
+              <p className="excerpt">{job.url}</p>
+              <p className="meta">
+                <span>Progress: {job.progress}%</span>
+                <span>{job.error_message ? `Error: ${job.error_message}` : "No error"}</span>
+              </p>
+              <div className="actions">
+                {job.document_id ? <Link href={`/documents/${job.document_id}`}>Open Document</Link> : null}
+              </div>
+            </article>
+          ))}
+          {jobs.length === 0 ? <p>No jobs yet.</p> : null}
+        </div>
       </section>
 
       <section className="panel">
