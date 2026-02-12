@@ -40,6 +40,23 @@ const normalizeDomain = (url: string) => {
   }
 };
 
+const normalizeContentImages = (html: string, baseUrl: string) => {
+  const dom = new JSDOM(`<body>${html}</body>`, { url: baseUrl });
+  const { document } = dom.window;
+
+  const images = Array.from(document.querySelectorAll("img"));
+  for (const img of images) {
+    img.removeAttribute("width");
+    img.removeAttribute("height");
+    img.removeAttribute("sizes");
+    img.style.maxWidth = "100%";
+    img.style.height = "auto";
+    img.style.display = "block";
+  }
+
+  return document.body.innerHTML;
+};
+
 const toMarkdown = (html: string) => turndown.turndown(html).trim();
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -74,7 +91,8 @@ export const runImportDocument = async (input: ImportInput) => {
       throw new Error("Could not extract readable content");
     }
 
-    const markdown = toMarkdown(article.content);
+    const normalizedHtml = normalizeContentImages(article.content, input.url);
+    const markdown = toMarkdown(normalizedHtml);
     if (!markdown) {
       throw new Error("Extracted content is empty");
     }
@@ -91,7 +109,7 @@ export const runImportDocument = async (input: ImportInput) => {
       user_title: input.title?.trim() || null,
       excerpt: trimText(article.excerpt),
       content_markdown: markdown,
-      content_html: article.content,
+      content_html: normalizedHtml,
       author: trimText(article.byline, 120),
       language,
       content_hash: sha256(markdown)
@@ -100,7 +118,7 @@ export const runImportDocument = async (input: ImportInput) => {
     await createCapture({
       document_id: document.id,
       raw_html: input.save_raw_html ? rawHtml : null,
-      cleaned_html: article.content,
+      cleaned_html: normalizedHtml,
       extractor: "readability",
       extractor_version: "mozilla/readability",
       extract_score: null,

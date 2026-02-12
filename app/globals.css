@@ -332,6 +332,14 @@ button:disabled {
   background: #eef2f7;
 }
 
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 12px auto;
+  border-radius: 8px;
+}
+
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;
