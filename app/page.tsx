@@ -263,7 +263,7 @@ export default function HomePage() {
   return (
     <main className="shell">
       <header className="topbar">
-        <h1>web_summary 인수의 공부노트</h1>
+        <h1>인수의 공부노트</h1>
         <p>Clean reading archive for study pages</p>
       </header>
 

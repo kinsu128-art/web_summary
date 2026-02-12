@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "web_summary 인수의 공부노트",
+  title: "인수의 공부노트",
   description: "Web study archive API and app scaffold"
 };
 
