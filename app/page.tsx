@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type DocumentListItem = {
   id: string;
@@ -33,6 +35,11 @@ const formatDate = (iso: string) =>
   }).format(new Date(iso));
 
 export default function HomePage() {
+  const router = useRouter();
+  const [authReady, setAuthReady] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [isAccountActionRunning, setIsAccountActionRunning] = useState(false);
+
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [tagsInput, setTagsInput] = useState("");
@@ -68,7 +75,7 @@ export default function HomePage() {
       if (tagsRes.ok) setTags(Array.isArray(tagsJson.items) ? tagsJson.items : []);
       if (foldersRes.ok) setFolders(Array.isArray(foldersJson.items) ? foldersJson.items : []);
     } catch {
-      // keep UI usable even if meta fetch fails
+      // Keep UI usable even if metadata fetch fails.
     }
   }, []);
 
@@ -77,33 +84,29 @@ export default function HomePage() {
       const response = await fetch("/api/v1/jobs?limit=3", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) {
-        setJobsError(data?.error?.message ?? "Failed to load jobs.");
+        setJobsError(data?.error?.message ?? "작업 내역을 불러오지 못했습니다.");
         return;
       }
       setJobsError(null);
       setJobs(Array.isArray(data.items) ? data.items.slice(0, 3) : []);
     } catch {
-      setJobsError("Failed to load jobs.");
+      setJobsError("작업 내역을 불러오지 못했습니다.");
     }
   }, []);
 
   const fetchSetup = useCallback(async () => {
     try {
       const response = await fetch("/api/v1/system/setup", { cache: "no-store" });
-      const data = await response.json();
-      const details = data?.error?.details;
-
       if (response.ok) {
         setSetupOk(true);
-        setSetupMessage("Final status: OK");
+        setSetupMessage("최종 상태: OK");
         return;
       }
-
       setSetupOk(false);
-      setSetupMessage(details?.all_ok === false ? "Final status: FAIL" : "Final status: FAIL");
+      setSetupMessage("최종 상태: FAIL");
     } catch {
       setSetupOk(false);
-      setSetupMessage("Final status: FAIL");
+      setSetupMessage("최종 상태: FAIL");
     }
   }, []);
 
@@ -119,30 +122,67 @@ export default function HomePage() {
 
       const response = await fetch(`/api/v1/documents?${params.toString()}`, { cache: "no-store" });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error?.message ?? "Failed to load documents.");
+      if (!response.ok) throw new Error(data?.error?.message ?? "문서를 불러오지 못했습니다.");
       setDocs(Array.isArray(data.items) ? data.items : []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load documents.");
+      setError(e instanceof Error ? e.message : "문서를 불러오지 못했습니다.");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    const supabase = getSupabaseBrowser();
+    let mounted = true;
+
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      if (!data.session) {
+        setAuthReady(true);
+        setIsAuthed(false);
+        router.replace("/login");
+        return;
+      }
+      setIsAuthed(true);
+      setAuthReady(true);
+    });
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setIsAuthed(false);
+        setAuthReady(true);
+        router.replace("/login");
+        return;
+      }
+      setIsAuthed(true);
+      setAuthReady(true);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (!authReady || !isAuthed) return;
     void fetchMeta();
     void fetchJobs();
     void fetchSetup();
     void fetchDocuments();
-  }, [fetchDocuments, fetchJobs, fetchMeta, fetchSetup]);
+  }, [authReady, isAuthed, fetchDocuments, fetchJobs, fetchMeta, fetchSetup]);
 
   useEffect(() => {
+    if (!authReady || !isAuthed) return;
     const hasRunning = jobs.some((job) => job.status !== "done" && job.status !== "failed");
     if (!hasRunning) return;
     const timer = window.setInterval(() => {
       void fetchJobs();
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [jobs, fetchJobs]);
+  }, [authReady, isAuthed, jobs, fetchJobs]);
 
   const parsedTags = useMemo(
     () =>
@@ -153,10 +193,63 @@ export default function HomePage() {
     [tagsInput]
   );
 
+  const runSearch = () => void fetchDocuments(q, selectedTag, selectedFolder);
+
+  const signOut = async () => {
+    setIsAccountActionRunning(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const supabase = getSupabaseBrowser();
+      await supabase.auth.signOut();
+      router.replace("/login");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "로그아웃에 실패했습니다.");
+    } finally {
+      setIsAccountActionRunning(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    const confirmed = window.confirm("정말 회원 탈퇴하시겠습니까? 저장된 계정은 복구되지 않습니다.");
+    if (!confirmed) return;
+
+    setIsAccountActionRunning(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const supabase = getSupabaseBrowser();
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+
+      const response = await fetch("/api/v1/auth/delete-account", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          (body as { error?: { message?: string } })?.error?.message ?? "회원 탈퇴 처리에 실패했습니다."
+        );
+      }
+
+      await supabase.auth.signOut();
+      router.replace("/login");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "회원 탈퇴 처리에 실패했습니다.");
+    } finally {
+      setIsAccountActionRunning(false);
+    }
+  };
+
   const submitImport = async (e: FormEvent) => {
     e.preventDefault();
     if (!url.trim()) {
-      setError("URL is required.");
+      setError("URL을 입력해 주세요.");
       return;
     }
 
@@ -177,16 +270,16 @@ export default function HomePage() {
         })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error?.message ?? "Import failed.");
+      if (!response.ok) throw new Error(data?.error?.message ?? "가져오기에 실패했습니다.");
 
-      setMessage("Saved successfully.");
+      setMessage("저장되었습니다.");
       setUrl("");
       setTitle("");
       setTagsInput("");
       setImportFolderId("");
       await Promise.all([fetchDocuments(q, selectedTag, selectedFolder), fetchMeta(), fetchJobs()]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Import failed.");
+      setError(e instanceof Error ? e.message : "가져오기에 실패했습니다.");
       await fetchJobs();
     } finally {
       setIsImporting(false);
@@ -205,12 +298,12 @@ export default function HomePage() {
         body: JSON.stringify({ name: newFolderName.trim() })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error?.message ?? "Failed to create folder.");
+      if (!response.ok) throw new Error(data?.error?.message ?? "폴더 생성에 실패했습니다.");
       setNewFolderName("");
-      setMessage("Folder created.");
+      setMessage("폴더를 만들었습니다.");
       await fetchMeta();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create folder.");
+      setError(e instanceof Error ? e.message : "폴더 생성에 실패했습니다.");
     } finally {
       setIsCreatingFolder(false);
     }
@@ -228,12 +321,12 @@ export default function HomePage() {
         body: JSON.stringify({ name: newTagName.trim() })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error?.message ?? "Failed to create tag.");
+      if (!response.ok) throw new Error(data?.error?.message ?? "태그 생성에 실패했습니다.");
       setNewTagName("");
-      setMessage("Tag created.");
+      setMessage("태그를 만들었습니다.");
       await fetchMeta();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create tag.");
+      setError(e instanceof Error ? e.message : "태그 생성에 실패했습니다.");
     } finally {
       setIsCreatingTag(false);
     }
@@ -247,26 +340,39 @@ export default function HomePage() {
       const response = await fetch(`/api/v1/tags/${id}`, { method: "DELETE" });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error((data as { error?: { message?: string } })?.error?.message ?? "Failed to delete tag.");
+        throw new Error((data as { error?: { message?: string } })?.error?.message ?? "태그 삭제에 실패했습니다.");
       }
-      setMessage("Tag deleted.");
+      setMessage("태그를 삭제했습니다.");
       await Promise.all([fetchMeta(), fetchDocuments(q, selectedTag, selectedFolder)]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete tag.");
+      setError(e instanceof Error ? e.message : "태그 삭제에 실패했습니다.");
     } finally {
       setDeletingTagId(null);
     }
   };
 
-  const runSearch = () => void fetchDocuments(q, selectedTag, selectedFolder);
+  if (!authReady || !isAuthed) {
+    return (
+      <main className="shell">
+        <section className="panel auth-panel">
+          <h2>로그인 확인 중...</h2>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="shell">
       <header className="topbar">
         <h1>인수의 공부노트</h1>
-        <p>Clean reading archive for study pages</p>
+        <p>공부용 웹페이지를 깔끔하게 저장하는 아카이브</p>
         <div className="topbar-actions">
-          <Link href="/login">로그인</Link>
+          <button disabled={isAccountActionRunning} onClick={signOut} type="button">
+            로그아웃
+          </button>
+          <button className="danger-btn" disabled={isAccountActionRunning} onClick={deleteAccount} type="button">
+            회원탈퇴
+          </button>
         </div>
       </header>
 
@@ -277,9 +383,7 @@ export default function HomePage() {
             Check Again
           </button>
         </div>
-        {setupMessage ? (
-          <p className={`notice ${setupOk ? "ok" : "err"}`}>{setupMessage}</p>
-        ) : null}
+        {setupMessage ? <p className={`notice ${setupOk ? "ok" : "err"}`}>{setupMessage}</p> : null}
       </section>
 
       <section className="panel">
@@ -291,18 +395,18 @@ export default function HomePage() {
           </label>
           <div className="form-grid">
             <label>
-              Custom title (optional)
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="My study title" />
+              사용자 제목 (선택)
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="나만의 제목" />
             </label>
             <label>
-              Tags (comma separated)
+              태그 (쉼표 구분)
               <input value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="react, hooks" />
             </label>
           </div>
           <label>
-            Folder (optional)
+            폴더 (선택)
             <select value={importFolderId} onChange={(e) => setImportFolderId(e.target.value)}>
-              <option value="">None</option>
+              <option value="">없음</option>
               {folders.map((folder) => (
                 <option key={folder.id} value={folder.id}>
                   {folder.name}
@@ -311,19 +415,19 @@ export default function HomePage() {
             </select>
           </label>
           <button disabled={isImporting} type="submit">
-            {isImporting ? "Importing..." : "Clean and Save"}
+            {isImporting ? "가져오는 중..." : "정리해서 저장"}
           </button>
         </form>
         <div className="inline-create">
-          <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="New folder name" />
+          <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="새 폴더 이름" />
           <button disabled={isCreatingFolder} onClick={createFolder} type="button">
-            {isCreatingFolder ? "Creating..." : "Create Folder"}
+            {isCreatingFolder ? "생성 중..." : "폴더 만들기"}
           </button>
         </div>
         <div className="inline-create">
-          <input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="New tag name" />
+          <input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="새 태그 이름" />
           <button disabled={isCreatingTag} onClick={createTag} type="button">
-            {isCreatingTag ? "Creating..." : "Create Tag"}
+            {isCreatingTag ? "생성 중..." : "태그 만들기"}
           </button>
         </div>
         {tags.length > 0 ? (
@@ -334,7 +438,7 @@ export default function HomePage() {
                 className="chip"
                 disabled={deletingTagId === tag.id}
                 onClick={() => void removeTag(tag.id)}
-                title="Delete tag"
+                title="태그 삭제"
                 type="button"
               >
                 #{tag.name} {deletingTagId === tag.id ? "..." : "x"}
@@ -353,19 +457,19 @@ export default function HomePage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search title or content"
+              placeholder="제목 또는 내용 검색"
               onKeyDown={(e) => e.key === "Enter" && runSearch()}
             />
             <button onClick={runSearch} type="button">
-              Search
+              검색
             </button>
           </div>
         </div>
         <div className="filter-row">
           <label>
-            Tag
+            태그
             <select value={selectedTag} onChange={(e) => setSelectedTag(e.target.value)}>
-              <option value="">All</option>
+              <option value="">전체</option>
               {tags.map((tag) => (
                 <option key={tag.id} value={tag.name}>
                   {tag.name}
@@ -374,9 +478,9 @@ export default function HomePage() {
             </select>
           </label>
           <label>
-            Folder
+            폴더
             <select value={selectedFolder} onChange={(e) => setSelectedFolder(e.target.value)}>
-              <option value="">All</option>
+              <option value="">전체</option>
               {folders.map((folder) => (
                 <option key={folder.id} value={folder.id}>
                   {folder.name}
@@ -385,11 +489,11 @@ export default function HomePage() {
             </select>
           </label>
           <button onClick={runSearch} type="button">
-            Apply Filters
+            필터 적용
           </button>
         </div>
 
-        {isLoading ? <p>Loading...</p> : null}
+        {isLoading ? <p>불러오는 중...</p> : null}
 
         <div className="list">
           {docs.map((doc) => (
@@ -398,20 +502,20 @@ export default function HomePage() {
                 <h3>{doc.display_title}</h3>
                 <span>{formatDate(doc.created_at)}</span>
               </div>
-              <p className="excerpt">{doc.excerpt ?? "No excerpt."}</p>
+              <p className="excerpt">{doc.excerpt ?? "요약이 없습니다."}</p>
               <p className="meta">
                 <span>{doc.source_domain ?? "unknown"}</span>
                 <span>{doc.tags.length > 0 ? `#${doc.tags.join(" #")}` : "#untagged"}</span>
               </p>
               <div className="actions">
-                <Link href={`/documents/${doc.id}`}>Read</Link>
+                <Link href={`/documents/${doc.id}`}>읽기</Link>
                 <a href={doc.source_url} rel="noreferrer" target="_blank">
-                  Source
+                  원문
                 </a>
               </div>
             </article>
           ))}
-          {!isLoading && docs.length === 0 ? <p>No documents yet.</p> : null}
+          {!isLoading && docs.length === 0 ? <p>저장된 문서가 없습니다.</p> : null}
         </div>
       </section>
 
@@ -432,15 +536,15 @@ export default function HomePage() {
               </div>
               <p className="excerpt">{job.url}</p>
               <p className="meta">
-                <span>Progress: {job.progress}%</span>
-                <span>{job.error_message ? `Error: ${job.error_message}` : "No error"}</span>
+                <span>진행률: {job.progress}%</span>
+                <span>{job.error_message ? `오류: ${job.error_message}` : "오류 없음"}</span>
               </p>
               <div className="actions">
-                {job.document_id ? <Link href={`/documents/${job.document_id}`}>Open Document</Link> : null}
+                {job.document_id ? <Link href={`/documents/${job.document_id}`}>문서 열기</Link> : null}
               </div>
             </article>
           ))}
-          {jobs.length === 0 ? <p>No jobs yet.</p> : null}
+          {jobs.length === 0 ? <p>최근 작업이 없습니다.</p> : null}
         </div>
       </section>
     </main>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-type ErrorCode = "VALIDATION_ERROR" | "NOT_FOUND" | "CONFLICT" | "INTERNAL_ERROR" | "CONFIG_ERROR";
+type ErrorCode = "VALIDATION_ERROR" | "NOT_FOUND" | "CONFLICT" | "INTERNAL_ERROR" | "CONFIG_ERROR" | "UNAUTHORIZED";
 
 export const ok = <T>(data: T, status = 200) => NextResponse.json(data, { status });
 
