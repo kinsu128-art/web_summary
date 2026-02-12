@@ -9,7 +9,8 @@
     "lint": "eslint app lib tests playwright.config.ts next.config.ts",
     "test:e2e": "playwright test",
     "deploy:verify": "node scripts/deploy-verify.mjs",
-    "deploy:ready": "node scripts/deploy-verify.mjs --strict"
+    "deploy:ready": "node scripts/deploy-verify.mjs --strict",
+    "vercel:env:sync": "node scripts/vercel-env-sync.mjs"
   },
   "repository": {
     "type": "git",

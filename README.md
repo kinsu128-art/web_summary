@@ -33,6 +33,8 @@ Web study archive app scaffold with Next.js, Supabase, and Vercel.
 4. Run deployment checks:
    - `npm run deploy:verify -- --base-url=https://websummary.vercel.app`
    - `npm run deploy:ready -- --base-url=https://websummary.vercel.app` (strict, requires setup 200)
+5. Sync Vercel env vars in one command:
+   - `npm run vercel:env:sync -- NEXT_PUBLIC_SUPABASE_URL=... NEXT_PUBLIC_SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=...`
 
 ## Implemented endpoints
 - `GET /api/health`
