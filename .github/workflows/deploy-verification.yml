@@ -1,0 +1,39 @@
+name: Deploy Verification
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  quality-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E smoke
+        env:
+          E2E_BASE_URL: https://websummary.vercel.app
+        run: npm run test:e2e
+
+      - name: Deploy verify (non-strict)
+        run: npm run deploy:verify -- --base-url=https://websummary.vercel.app

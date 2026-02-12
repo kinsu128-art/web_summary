@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint app lib tests playwright.config.ts next.config.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "deploy:verify": "node scripts/deploy-verify.mjs",
+    "deploy:ready": "node scripts/deploy-verify.mjs --strict"
   },
   "repository": {
     "type": "git",

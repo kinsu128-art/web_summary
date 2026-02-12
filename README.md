@@ -30,6 +30,9 @@ Web study archive app scaffold with Next.js, Supabase, and Vercel.
 1. Connect GitHub repository to Vercel
 2. Configure environment variables in Vercel
 3. Deploy
+4. Run deployment checks:
+   - `npm run deploy:verify -- --base-url=https://websummary.vercel.app`
+   - `npm run deploy:ready -- --base-url=https://websummary.vercel.app` (strict, requires setup 200)
 
 ## Implemented endpoints
 - `GET /api/health`
@@ -56,3 +59,7 @@ Web study archive app scaffold with Next.js, Supabase, and Vercel.
 1. Run `supabase/sql/setup_check.sql` in Supabase SQL Editor
 2. Call `GET /api/v1/system/setup`
 3. Confirm `all_ok: true`
+
+## CI
+- GitHub Actions workflow: `.github/workflows/deploy-verification.yml`
+- It runs lint/build/playwright smoke + deploy verification on every push to `main`
