@@ -265,6 +265,9 @@ export default function HomePage() {
       <header className="topbar">
         <h1>인수의 공부노트</h1>
         <p>Clean reading archive for study pages</p>
+        <div className="topbar-actions">
+          <Link href="/login">로그인</Link>
+        </div>
       </header>
 
       <section className="panel">

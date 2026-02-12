@@ -41,6 +41,16 @@ body {
   color: var(--muted);
 }
 
+.topbar-actions {
+  margin-top: 10px;
+}
+
+.topbar-actions a {
+  color: #0c4a6e;
+  text-decoration: none;
+  font-weight: 700;
+}
+
 .panel {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -58,6 +68,28 @@ body {
 .panel h1 {
   margin: 8px 0 10px;
   font-size: 26px;
+}
+
+.auth-panel {
+  max-width: 520px;
+  margin: 48px auto 0;
+}
+
+.auth-desc {
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+
+.auth-help {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.auth-help a {
+  color: #0c4a6e;
+  text-decoration: none;
+  font-weight: 600;
 }
 
 .panel-head {
