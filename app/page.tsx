@@ -25,12 +25,6 @@ type JobItem = {
   created_at: string;
 };
 
-type SetupCheckItem = {
-  table: string;
-  ok: boolean;
-  error: string | null;
-};
-
 const formatDate = (iso: string) =>
   new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
@@ -53,7 +47,6 @@ export default function HomePage() {
   const [tags, setTags] = useState<TagItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [setupOk, setSetupOk] = useState<boolean | null>(null);
-  const [setupItems, setSetupItems] = useState<SetupCheckItem[]>([]);
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -81,14 +74,14 @@ export default function HomePage() {
 
   const fetchJobs = useCallback(async () => {
     try {
-      const response = await fetch("/api/v1/jobs?limit=12", { cache: "no-store" });
+      const response = await fetch("/api/v1/jobs?limit=3", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) {
         setJobsError(data?.error?.message ?? "Failed to load jobs.");
         return;
       }
       setJobsError(null);
-      setJobs(Array.isArray(data.items) ? data.items : []);
+      setJobs(Array.isArray(data.items) ? data.items.slice(0, 3) : []);
     } catch {
       setJobsError("Failed to load jobs.");
     }
@@ -102,18 +95,15 @@ export default function HomePage() {
 
       if (response.ok) {
         setSetupOk(true);
-        setSetupMessage("Supabase setup is healthy.");
-        setSetupItems(Array.isArray(data?.tables) ? data.tables : []);
+        setSetupMessage("Final status: OK");
         return;
       }
 
       setSetupOk(false);
-      setSetupMessage(data?.error?.message ?? "Supabase setup check failed.");
-      setSetupItems(Array.isArray(details?.tables) ? details.tables : []);
+      setSetupMessage(details?.all_ok === false ? "Final status: FAIL" : "Final status: FAIL");
     } catch {
       setSetupOk(false);
-      setSetupMessage("Supabase setup check failed.");
-      setSetupItems([]);
+      setSetupMessage("Final status: FAIL");
     }
   }, []);
 
@@ -273,7 +263,7 @@ export default function HomePage() {
   return (
     <main className="shell">
       <header className="topbar">
-        <h1>web_summary</h1>
+        <h1>web_summary 인수의 공부노트</h1>
         <p>Clean reading archive for study pages</p>
       </header>
 
@@ -285,20 +275,7 @@ export default function HomePage() {
           </button>
         </div>
         {setupMessage ? (
-          <p className={`notice ${setupOk ? "ok" : "err"}`}>
-            {setupMessage}
-            {setupOk === false ? " Check Vercel env vars and Supabase migrations." : ""}
-          </p>
-        ) : null}
-        {setupItems.length > 0 ? (
-          <div className="setup-grid">
-            {setupItems.map((item) => (
-              <article key={item.table} className={`setup-item ${item.ok ? "pass" : "fail"}`}>
-                <h3>{item.table}</h3>
-                <p>{item.ok ? "ok" : item.error ?? "missing"}</p>
-              </article>
-            ))}
-          </div>
+          <p className={`notice ${setupOk ? "ok" : "err"}`}>{setupMessage}</p>
         ) : null}
       </section>
 

@@ -35,6 +35,7 @@ export default function DocumentDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isReextracting, setIsReextracting] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -156,6 +157,21 @@ export default function DocumentDetailPage() {
     }
   };
 
+  const copyContent = async () => {
+    if (!doc?.content_markdown) return;
+    setIsCopying(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await navigator.clipboard.writeText(doc.content_markdown);
+      setMessage("내용을 복사했습니다.");
+    } catch {
+      setError("복사에 실패했습니다. 브라우저 권한을 확인해 주세요.");
+    } finally {
+      setIsCopying(false);
+    }
+  };
+
   return (
     <main className="shell">
       <section className="panel">
@@ -188,6 +204,9 @@ export default function DocumentDetailPage() {
               <a href={doc.source_url} rel="noreferrer" target="_blank">
                 Open Source
               </a>
+              <button disabled={isCopying} onClick={copyContent} type="button">
+                {isCopying ? "Copying..." : "내용 복사하기"}
+              </button>
             </div>
 
             {editMode ? (
