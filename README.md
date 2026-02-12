@@ -37,3 +37,12 @@ Web study archive app scaffold with Next.js, Supabase, and Vercel.
 - `DELETE /api/v1/tags/{id}`
 - `GET/POST /api/v1/folders`
 - `PATCH/DELETE /api/v1/folders/{id}`
+
+## Import behavior
+- `POST /api/v1/documents/import` now performs:
+  - URL fetch
+  - readability extraction
+  - markdown conversion
+  - document/capture save
+  - tag/folder mapping
+  - import job status updates (`queued -> fetching -> extracting -> saving -> done|failed`)

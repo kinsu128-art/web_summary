@@ -1,5 +1,5 @@
-import { createImportJob } from "@/lib/repositories/archive";
 import { errorResponse, ok } from "@/lib/http";
+import { runImportDocument } from "@/lib/services/import-document";
 import { importDocumentSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -12,10 +12,10 @@ export async function POST(request: Request) {
       });
     }
 
-    const job = await createImportJob(parsed.data.url);
-    return ok({ job_id: job.id, status: job.status }, 202);
+    const result = await runImportDocument(parsed.data);
+    return ok(result, 202);
   } catch (error) {
-    return errorResponse("INTERNAL_ERROR", "Failed to create import job", 500, {
+    return errorResponse("INTERNAL_ERROR", "Failed to import document", 500, {
       reason: error instanceof Error ? error.message : "unknown"
     });
   }

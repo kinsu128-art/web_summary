@@ -5,7 +5,7 @@ const db = () => getSupabaseAdmin();
 
 const displayTitle = (row: Pick<DocumentRow, "title" | "user_title">) => row.user_title ?? row.title;
 
-const estimateReadingMinutes = (markdown: string) => {
+export const estimateReadingMinutes = (markdown: string) => {
   const words = markdown.trim().split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.ceil(words / 220));
 };
@@ -22,6 +22,65 @@ export const createImportJob = async (url: string) => {
 
   if (error) throw error;
   return data as { id: string; status: string };
+};
+
+export const updateImportJob = async (
+  id: string,
+  patch: { status?: string; progress?: number; document_id?: string | null; error_message?: string | null }
+) => {
+  const { error } = await db().from("import_jobs").update(patch).eq("id", id);
+  if (error) throw error;
+};
+
+export const createDocument = async (input: {
+  source_url: string;
+  canonical_url?: string | null;
+  source_domain?: string | null;
+  title: string;
+  user_title?: string | null;
+  excerpt?: string | null;
+  content_markdown: string;
+  content_html?: string | null;
+  author?: string | null;
+  published_at?: string | null;
+  language?: string;
+  content_hash?: string;
+}) => {
+  const { data, error } = await db()
+    .from("documents")
+    .insert({
+      source_url: input.source_url,
+      canonical_url: input.canonical_url ?? null,
+      source_domain: input.source_domain ?? null,
+      title: input.title,
+      user_title: input.user_title ?? null,
+      excerpt: input.excerpt ?? null,
+      content_markdown: input.content_markdown,
+      content_html: input.content_html ?? null,
+      author: input.author ?? null,
+      published_at: input.published_at ?? null,
+      language: input.language ?? "ko",
+      reading_minutes: estimateReadingMinutes(input.content_markdown),
+      content_hash: input.content_hash ?? null,
+      status: "ready"
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data as { id: string };
+};
+
+export const createCapture = async (input: {
+  document_id: string;
+  raw_html?: string | null;
+  cleaned_html?: string | null;
+  extractor: string;
+  extractor_version?: string | null;
+  extract_score?: number | null;
+  error_message?: string | null;
+}) => {
+  const { error } = await db().from("captures").insert(input);
+  if (error) throw error;
 };
 
 type DocumentListQuery = {
@@ -253,7 +312,7 @@ const getFolderIdsByDocumentIds = async (ids: string[]) => {
   return map;
 };
 
-const replaceDocumentFolders = async (documentId: string, folderIds: string[]) => {
+export const replaceDocumentFolders = async (documentId: string, folderIds: string[]) => {
   const normalized = [...new Set(folderIds)];
   const { error: delError } = await db().from("document_folders").delete().eq("document_id", documentId);
   if (delError) throw delError;
@@ -264,7 +323,7 @@ const replaceDocumentFolders = async (documentId: string, folderIds: string[]) =
   if (error) throw error;
 };
 
-const replaceDocumentTags = async (documentId: string, tagNames: string[]) => {
+export const replaceDocumentTags = async (documentId: string, tagNames: string[]) => {
   const normalized = normalizeTagNames(tagNames);
 
   const { error: delError } = await db().from("document_tags").delete().eq("document_id", documentId);
