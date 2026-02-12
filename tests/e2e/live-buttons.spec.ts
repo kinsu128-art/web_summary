@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 test("buttons work with real data flow", async ({ page }) => {
+  test.setTimeout(120_000);
+
   const token = `pw-${Date.now()}`.toLowerCase();
   const title = `Playwright ${token}`;
   const appendText = `playwright-check-${token}`;
@@ -22,7 +24,7 @@ test("buttons work with real data flow", async ({ page }) => {
   await expect(page.getByText("Saved successfully.")).toBeVisible({ timeout: 90_000 });
 
   // 3) Filter by tag and open the imported doc
-  await page.getByLabel("Tag").selectOption({ label: token });
+  await page.getByRole("combobox", { name: "Tag" }).selectOption({ label: token });
   await page.getByRole("button", { name: "Apply Filters" }).click();
 
   const targetItem = page.locator("article.item").filter({ hasText: title }).first();
