@@ -1,0 +1,568 @@
+openapi: 3.0.3
+info:
+  title: Web Study Archive API
+  version: 1.0.0
+  description: API for importing, cleaning, organizing, and reading saved web study documents.
+servers:
+  - url: /api/v1
+tags:
+  - name: Documents
+  - name: Jobs
+  - name: Tags
+  - name: Folders
+paths:
+  /documents/import:
+    post:
+      tags: [Documents]
+      summary: Create import job from URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportDocumentRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportDocumentAccepted'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+  /documents:
+    get:
+      tags: [Documents]
+      summary: List documents
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: tag
+          schema:
+            type: string
+        - in: query
+          name: folder_id
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/DocumentStatus'
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [created_at, title]
+            default: created_at
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListResponse'
+  /documents/{id}:
+    get:
+      tags: [Documents]
+      summary: Get document detail
+      parameters:
+        - $ref: '#/components/parameters/DocumentIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentDetail'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      tags: [Documents]
+      summary: Update document metadata/content
+      parameters:
+        - $ref: '#/components/parameters/DocumentIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDocumentRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentDetail'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      tags: [Documents]
+      summary: Delete document
+      parameters:
+        - $ref: '#/components/parameters/DocumentIdPath'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /jobs/{id}:
+    get:
+      tags: [Jobs]
+      summary: Get import job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobDetail'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /tags:
+    get:
+      tags: [Tags]
+      summary: List tags
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tag'
+    post:
+      tags: [Tags]
+      summary: Create tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTagRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /tags/{id}:
+    delete:
+      tags: [Tags]
+      summary: Delete tag
+      parameters:
+        - $ref: '#/components/parameters/TagIdPath'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /folders:
+    get:
+      tags: [Folders]
+      summary: List folders
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Folder'
+    post:
+      tags: [Folders]
+      summary: Create folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFolderRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Folder'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /folders/{id}:
+    patch:
+      tags: [Folders]
+      summary: Update folder
+      parameters:
+        - $ref: '#/components/parameters/FolderIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFolderRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Folder'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      tags: [Folders]
+      summary: Delete folder
+      parameters:
+        - $ref: '#/components/parameters/FolderIdPath'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+components:
+  parameters:
+    PageParam:
+      in: query
+      name: page
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    LimitParam:
+      in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    DocumentIdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    JobIdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    TagIdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    FolderIdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+  responses:
+    ValidationError:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictError:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    DocumentStatus:
+      type: string
+      enum: [ready, processing, failed, archived]
+    JobStatus:
+      type: string
+      enum: [queued, fetching, extracting, saving, done, failed]
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+    ImportDocumentRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+        title:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        folder_ids:
+          type: array
+          items:
+            type: string
+        save_raw_html:
+          type: boolean
+          default: false
+    ImportDocumentAccepted:
+      type: object
+      required: [job_id, status]
+      properties:
+        job_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/JobStatus'
+    DocumentListItem:
+      type: object
+      required:
+        - id
+        - title
+        - display_title
+        - source_url
+        - status
+        - tags
+        - folder_ids
+        - created_at
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        display_title:
+          type: string
+        source_url:
+          type: string
+        source_domain:
+          type: string
+          nullable: true
+        excerpt:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        folder_ids:
+          type: array
+          items:
+            type: string
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        created_at:
+          type: string
+          format: date-time
+    DocumentListResponse:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentListItem'
+        pagination:
+          type: object
+          required: [page, limit, total]
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+    DocumentDetail:
+      type: object
+      required:
+        - id
+        - title
+        - display_title
+        - source_url
+        - content_markdown
+        - tags
+        - folder_ids
+        - reading_minutes
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        user_title:
+          type: string
+          nullable: true
+        display_title:
+          type: string
+        source_url:
+          type: string
+        content_markdown:
+          type: string
+        content_html:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        folder_ids:
+          type: array
+          items:
+            type: string
+        reading_minutes:
+          type: integer
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    UpdateDocumentRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        user_title:
+          type: string
+          nullable: true
+        content_markdown:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        folder_ids:
+          type: array
+          items:
+            type: string
+    JobDetail:
+      type: object
+      required: [id, url, status, progress, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        document_id:
+          type: string
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Tag:
+      type: object
+      required: [id, name, color, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    CreateTagRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        color:
+          type: string
+          default: '#4A5568'
+    Folder:
+      type: object
+      required: [id, name, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    CreateFolderRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+    UpdateFolderRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
