@@ -1,5 +1,5 @@
 import { createTag, listTags } from "@/lib/repositories/archive";
-import { errorResponse, ok } from "@/lib/http";
+import { errorResponse, getErrorMessage, isSchemaCacheError, ok } from "@/lib/http";
 import { createTagSchema } from "@/lib/validation";
 
 export async function GET() {
@@ -7,8 +7,13 @@ export async function GET() {
     const items = await listTags();
     return ok({ items });
   } catch (error) {
+    if (isSchemaCacheError(error)) {
+      return errorResponse("CONFIG_ERROR", "Supabase REST schema cache is not ready.", 503, {
+        reason: getErrorMessage(error)
+      });
+    }
     return errorResponse("INTERNAL_ERROR", "Failed to load tags", 500, {
-      reason: error instanceof Error ? error.message : "unknown"
+      reason: getErrorMessage(error)
     });
   }
 }
@@ -25,7 +30,12 @@ export async function POST(request: Request) {
     const created = await createTag(parsed.data.name, parsed.data.color);
     return ok(created, 201);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown";
+    if (isSchemaCacheError(error)) {
+      return errorResponse("CONFIG_ERROR", "Supabase REST schema cache is not ready.", 503, {
+        reason: getErrorMessage(error)
+      });
+    }
+    const message = getErrorMessage(error);
     if (message.includes("duplicate") || message.includes("unique")) {
       return errorResponse("CONFLICT", "Tag already exists", 409);
     }

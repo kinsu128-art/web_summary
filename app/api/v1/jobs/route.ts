@@ -1,4 +1,4 @@
-import { errorResponse, ok } from "@/lib/http";
+import { errorResponse, getErrorMessage, isSchemaCacheError, ok } from "@/lib/http";
 import { ConfigError } from "@/lib/env";
 import { listJobs } from "@/lib/repositories/archive";
 
@@ -14,14 +14,13 @@ export async function GET(request: Request) {
         missing: error.message
       });
     }
-    const reason =
-      error instanceof Error
-        ? error.message
-        : typeof error === "object" && error !== null && "message" in error
-          ? String((error as { message?: unknown }).message)
-          : "unknown";
+    if (isSchemaCacheError(error)) {
+      return errorResponse("CONFIG_ERROR", "Supabase REST schema cache is not ready.", 503, {
+        reason: getErrorMessage(error)
+      });
+    }
     return errorResponse("INTERNAL_ERROR", "Failed to load jobs", 500, {
-      reason
+      reason: getErrorMessage(error)
     });
   }
 }

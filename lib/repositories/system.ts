@@ -21,7 +21,7 @@ export const checkSupabaseSetup = async () => {
 
   const checks = await Promise.all(
     requiredTables.map(async (table): Promise<SetupTableCheck> => {
-      const { error } = await db.from(table).select("*", { head: true, count: "exact" }).limit(1);
+      const { error } = await db.from(table).select("*").limit(1);
       return {
         table,
         ok: !error,

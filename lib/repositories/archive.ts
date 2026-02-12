@@ -220,11 +220,7 @@ export const listJobs = async (limit = 20) => {
     .select("id,url,status,progress,document_id,error_message,created_at,updated_at")
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error) {
-    const code = (error as { code?: string }).code;
-    if (code === "PGRST205") return [];
-    throw error;
-  }
+  if (error) throw error;
   return data ?? [];
 };
 

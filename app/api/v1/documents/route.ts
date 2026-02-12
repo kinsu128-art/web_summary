@@ -1,5 +1,5 @@
 import { listDocuments } from "@/lib/repositories/archive";
-import { errorResponse, ok } from "@/lib/http";
+import { errorResponse, getErrorMessage, isSchemaCacheError, ok } from "@/lib/http";
 
 export async function GET(request: Request) {
   try {
@@ -34,8 +34,13 @@ export async function GET(request: Request) {
       }
     });
   } catch (error) {
+    if (isSchemaCacheError(error)) {
+      return errorResponse("CONFIG_ERROR", "Supabase REST schema cache is not ready.", 503, {
+        reason: getErrorMessage(error)
+      });
+    }
     return errorResponse("INTERNAL_ERROR", "Failed to load documents", 500, {
-      reason: error instanceof Error ? error.message : "unknown"
+      reason: getErrorMessage(error)
     });
   }
 }
