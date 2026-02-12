@@ -31,6 +31,17 @@ body {
   padding: 24px 20px 40px;
 }
 
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.topbar-main {
+  min-width: 0;
+}
+
 .topbar h1 {
   margin: 0;
   font-size: clamp(28px, 4vw, 42px);
@@ -42,8 +53,8 @@ body {
 }
 
 .topbar-actions {
-  margin-top: 10px;
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
 }
@@ -341,6 +352,21 @@ button:disabled {
   font-weight: 600;
 }
 
+.pagination {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.pagination span {
+  color: var(--muted);
+  font-size: 14px;
+  min-width: 56px;
+  text-align: center;
+}
+
 .markdown {
   margin: 14px 0 0;
   border: 1px solid var(--line);
@@ -415,6 +441,11 @@ code {
 }
 
 @media (max-width: 860px) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .form-grid {
     grid-template-columns: 1fr;
   }
@@ -442,5 +473,9 @@ code {
 
   .setup-grid {
     grid-template-columns: 1fr;
+  }
+
+  .pagination {
+    justify-content: flex-start;
   }
 }

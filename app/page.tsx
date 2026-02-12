@@ -28,6 +28,8 @@ type JobItem = {
   created_at: string;
 };
 
+const ARCHIVE_PAGE_SIZE = 5;
+
 const formatDate = (iso: string) =>
   new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
@@ -52,6 +54,8 @@ export default function HomePage() {
   const [selectedTag, setSelectedTag] = useState("");
   const [selectedFolder, setSelectedFolder] = useState("");
   const [docs, setDocs] = useState<DocumentListItem[]>([]);
+  const [docsPage, setDocsPage] = useState(1);
+  const [docsTotalPages, setDocsTotalPages] = useState(1);
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
@@ -94,12 +98,13 @@ export default function HomePage() {
     }
   }, []);
 
-  const fetchDocuments = useCallback(async (query?: string, tag?: string, folderId?: string) => {
+  const fetchDocuments = useCallback(async (page = 1, query?: string, tag?: string, folderId?: string) => {
     setIsLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      params.set("limit", "30");
+      params.set("page", String(page));
+      params.set("limit", String(ARCHIVE_PAGE_SIZE));
       if (query?.trim()) params.set("q", query.trim());
       if (tag?.trim()) params.set("tag", tag.trim());
       if (folderId?.trim()) params.set("folder_id", folderId.trim());
@@ -107,7 +112,14 @@ export default function HomePage() {
       const response = await authFetch(`/api/v1/documents?${params.toString()}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error?.message ?? "문서를 불러오지 못했습니다.");
-      setDocs(Array.isArray(data.items) ? data.items : []);
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      const total = Number(data?.pagination?.total ?? 0);
+      const totalPages = Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE));
+
+      setDocs(items);
+      setDocsPage(Math.min(page, totalPages));
+      setDocsTotalPages(totalPages);
     } catch (e) {
       setError(e instanceof Error ? e.message : "문서를 불러오지 못했습니다.");
     } finally {
@@ -158,7 +170,7 @@ export default function HomePage() {
     if (!authReady || !isAuthed) return;
     void fetchMeta();
     void fetchJobs();
-    void fetchDocuments();
+    void fetchDocuments(1);
   }, [authReady, isAuthed, fetchDocuments, fetchJobs, fetchMeta]);
 
   useEffect(() => {
@@ -180,7 +192,12 @@ export default function HomePage() {
     [tagsInput]
   );
 
-  const runSearch = () => void fetchDocuments(q, selectedTag, selectedFolder);
+  const runSearch = () => void fetchDocuments(1, q, selectedTag, selectedFolder);
+
+  const moveDocsPage = (nextPage: number) => {
+    const page = Math.max(1, Math.min(nextPage, docsTotalPages));
+    void fetchDocuments(page, q, selectedTag, selectedFolder);
+  };
 
   const signOut = async () => {
     setIsAccountActionRunning(true);
@@ -219,9 +236,7 @@ export default function HomePage() {
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(
-          (body as { error?: { message?: string } })?.error?.message ?? "회원 탈퇴 처리에 실패했습니다."
-        );
+        throw new Error((body as { error?: { message?: string } })?.error?.message ?? "회원 탈퇴 처리에 실패했습니다.");
       }
 
       await supabase.auth.signOut();
@@ -264,7 +279,7 @@ export default function HomePage() {
       setTitle("");
       setTagsInput("");
       setImportFolderId("");
-      await Promise.all([fetchDocuments(q, selectedTag, selectedFolder), fetchMeta(), fetchJobs()]);
+      await Promise.all([fetchDocuments(1, q, selectedTag, selectedFolder), fetchMeta(), fetchJobs()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "가져오기에 실패했습니다.");
       await fetchJobs();
@@ -330,7 +345,7 @@ export default function HomePage() {
         throw new Error((data as { error?: { message?: string } })?.error?.message ?? "태그 삭제에 실패했습니다.");
       }
       setMessage("태그를 삭제했습니다.");
-      await Promise.all([fetchMeta(), fetchDocuments(q, selectedTag, selectedFolder)]);
+      await Promise.all([fetchMeta(), fetchDocuments(1, q, selectedTag, selectedFolder)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "태그 삭제에 실패했습니다.");
     } finally {
@@ -351,8 +366,10 @@ export default function HomePage() {
   return (
     <main className="shell">
       <header className="topbar">
-        <h1>인수의 공부노트</h1>
-        <p>공부용 웹페이지를 깔끔하게 저장하는 아카이브</p>
+        <div className="topbar-main">
+          <h1>인수의 공부노트</h1>
+          <p>공부용 웹페이지를 깔끔하게 저장하는 아카이브</p>
+        </div>
         <div className="topbar-actions">
           {isAdmin ? <Link href="/admin">관리 페이지</Link> : null}
           <button disabled={isAccountActionRunning} onClick={signOut} type="button">
@@ -396,6 +413,7 @@ export default function HomePage() {
             {isImporting ? "가져오는 중..." : "정리해서 저장"}
           </button>
         </form>
+
         <div className="inline-create">
           <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="새 폴더 이름" />
           <button disabled={isCreatingFolder} onClick={createFolder} type="button">
@@ -408,6 +426,7 @@ export default function HomePage() {
             {isCreatingTag ? "생성 중..." : "태그 만들기"}
           </button>
         </div>
+
         {tags.length > 0 ? (
           <div className="chip-row">
             {tags.map((tag) => (
@@ -424,8 +443,9 @@ export default function HomePage() {
             ))}
           </div>
         ) : null}
-        {message && <p className="notice ok">{message}</p>}
-        {error && <p className="notice err">{error}</p>}
+
+        {message ? <p className="notice ok">{message}</p> : null}
+        {error ? <p className="notice err">{error}</p> : null}
       </section>
 
       <section className="panel">
@@ -443,6 +463,7 @@ export default function HomePage() {
             </button>
           </div>
         </div>
+
         <div className="filter-row">
           <label>
             태그
@@ -472,6 +493,22 @@ export default function HomePage() {
         </div>
 
         {isLoading ? <p>불러오는 중...</p> : null}
+
+        <div className="pagination">
+          <button disabled={docsPage <= 1 || isLoading} onClick={() => moveDocsPage(docsPage - 1)} type="button">
+            이전
+          </button>
+          <span>
+            {docsPage} / {docsTotalPages}
+          </span>
+          <button
+            disabled={docsPage >= docsTotalPages || isLoading}
+            onClick={() => moveDocsPage(docsPage + 1)}
+            type="button"
+          >
+            다음
+          </button>
+        </div>
 
         <div className="list">
           {docs.map((doc) => (
