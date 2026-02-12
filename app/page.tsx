@@ -25,6 +25,12 @@ type JobItem = {
   created_at: string;
 };
 
+type SetupCheckItem = {
+  table: string;
+  ok: boolean;
+  error: string | null;
+};
+
 const formatDate = (iso: string) =>
   new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
@@ -46,6 +52,9 @@ export default function HomePage() {
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
+  const [setupOk, setSetupOk] = useState<boolean | null>(null);
+  const [setupItems, setSetupItems] = useState<SetupCheckItem[]>([]);
+  const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -85,6 +94,29 @@ export default function HomePage() {
     }
   }, []);
 
+  const fetchSetup = useCallback(async () => {
+    try {
+      const response = await fetch("/api/v1/system/setup", { cache: "no-store" });
+      const data = await response.json();
+      const details = data?.error?.details;
+
+      if (response.ok) {
+        setSetupOk(true);
+        setSetupMessage("Supabase setup is healthy.");
+        setSetupItems(Array.isArray(data?.tables) ? data.tables : []);
+        return;
+      }
+
+      setSetupOk(false);
+      setSetupMessage(data?.error?.message ?? "Supabase setup check failed.");
+      setSetupItems(Array.isArray(details?.tables) ? details.tables : []);
+    } catch {
+      setSetupOk(false);
+      setSetupMessage("Supabase setup check failed.");
+      setSetupItems([]);
+    }
+  }, []);
+
   const fetchDocuments = useCallback(async (query?: string, tag?: string, folderId?: string) => {
     setIsLoading(true);
     setError(null);
@@ -109,8 +141,9 @@ export default function HomePage() {
   useEffect(() => {
     void fetchMeta();
     void fetchJobs();
+    void fetchSetup();
     void fetchDocuments();
-  }, [fetchDocuments, fetchJobs, fetchMeta]);
+  }, [fetchDocuments, fetchJobs, fetchMeta, fetchSetup]);
 
   useEffect(() => {
     const hasRunning = jobs.some((job) => job.status !== "done" && job.status !== "failed");
@@ -243,6 +276,31 @@ export default function HomePage() {
         <h1>web_summary</h1>
         <p>Clean reading archive for study pages</p>
       </header>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Supabase Setup Health</h2>
+          <button onClick={() => void fetchSetup()} type="button">
+            Check Again
+          </button>
+        </div>
+        {setupMessage ? (
+          <p className={`notice ${setupOk ? "ok" : "err"}`}>
+            {setupMessage}
+            {setupOk === false ? " Check Vercel env vars and Supabase migrations." : ""}
+          </p>
+        ) : null}
+        {setupItems.length > 0 ? (
+          <div className="setup-grid">
+            {setupItems.map((item) => (
+              <article key={item.table} className={`setup-item ${item.ok ? "pass" : "fail"}`}>
+                <h3>{item.table}</h3>
+                <p>{item.ok ? "ok" : item.error ?? "missing"}</p>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       <section className="panel">
         <h2>Import URL</h2>
