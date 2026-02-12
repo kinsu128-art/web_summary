@@ -7,6 +7,17 @@ import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type AuthMode = "login" | "signup";
 
+const mapAuthErrorMessage = (message: string) => {
+  const lower = message.toLowerCase();
+  if (lower.includes("signups not allowed") || lower.includes("signup is disabled")) {
+    return "현재 Supabase에서 이메일 회원가입이 비활성화되어 있습니다. Supabase Dashboard > Authentication > Providers > Email에서 회원가입을 활성화해 주세요.";
+  }
+  if (lower.includes("email not confirmed")) {
+    return "이메일 인증이 완료되지 않았습니다. 받은편지함에서 인증 링크를 클릭한 뒤 다시 로그인해 주세요.";
+  }
+  return message;
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("login");
@@ -64,7 +75,8 @@ export default function LoginPage() {
         setMode("login");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "처리 중 오류가 발생했습니다.");
+      const raw = err instanceof Error ? err.message : "처리 중 오류가 발생했습니다.";
+      setError(mapAuthErrorMessage(raw));
     } finally {
       setIsLoading(false);
     }
